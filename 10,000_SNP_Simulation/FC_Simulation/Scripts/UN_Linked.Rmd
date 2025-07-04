@@ -1,0 +1,290 @@
+---
+title: "UN_Linked"
+output: html_document
+date: "2025-06-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# NOTE: All simulations, file manipulations, and batch computations (e.g., LR generation, pedigree edits, and data summarisation) were conducted on a HPC system due to local memory and storage constraints.
+# Output and intermediate files were transferred to a local environment for visualisation and downstream analysis in R, leveraging RStudio’s improved interactivity and data inspection capabilities.
+
+# Load Packages
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+# Verify original .ped File
+
+```{r}
+# Define file paths
+FC_Linked_ped1_path <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FC_Simulation/Input_Files/FC_10000.ped"
+
+# Load the Linked file
+Original_FC_ped <- read_delim(FC_Linked_ped1_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Original_FC_ped)
+```
+
+# Manipulate the original .ped file to force unrelatedness
+# Break the familial relationships by setting columns 3 (Mother ID) and 4 (Father ID) to 0.
+
+```{r}
+# Set X3 and X4 (mother and father IDs) to 0 to break any pedigree structure
+Unrelated_FC_ped <- Original_FC_ped %>%
+  mutate(X3 = 0, 
+         X4 = 0)
+
+# Save the modified, unrelated dataset as a new .ped file
+write_delim(
+  Unrelated_FC_ped,
+  "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FC_Simulation/Input_Files/FC_10000_UN.ped",
+  delim = "\t",
+  col_names = FALSE
+)
+
+# Display structure of the files to confirm manipulation
+View(Unrelated_FC_ped)
+```
+
+# Simulation:
+# Load the created conda environment with MERLIN.
+# The SLURM batch script (merlin_UN_Linked.sh) is configured to simulate 50,000 replicates 
+# Outputs are saved with a defined prefix for downstream processing and kinship analysis.
+
+```{bash}
+# HPC
+# Prepare and submit SLURM batch script for MERLIN simulation
+
+$ nano merlin_UN_Linked.sh
+
+#!/bin/bash
+
+# SLURM job settings
+#SBATCH --job-name=merlin_UN_Linked
+#SBATCH --output=merlin_UN_Linked.out
+#SBATCH --error=merlin_UN_Linked.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=48:00:00
+
+# Load conda environment
+eval "$(conda shell.bash hook)"
+conda activate merlin_env
+
+# Move to working directory containing simulation inputs
+cd /scratch/users/k21040223/FC_Simulation/UN_Linked
+
+# Simulate MERLIN
+merlin -p ../Original_Files/FC_10000_UN.ped -d ../Original_Files/Updated_Kintelligence.dat -m ../Original_Files/Updated_Kintelligence_Map_noX.map -f ../Original_Files/Kintelligence_British_10000.freq -r 3898 --simulate --reruns 50000 --likelihood --information --markerNames --quiet --save --prefix UN_Linked/UN_Linked > likelihoods_UN_Linked_summary.txt
+
+# Submit job to HPC
+$ sbatch merlin_UN_Linked.sh
+```
+
+# Verify 1st simulated .ped File
+
+```{r}
+# Define file paths
+UN_Linked_ped1_path <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FC_Simulation/UN_Linked/merlin-00003898-00001-replicate.ped"
+
+# Load the Linked file
+UN_Linked_ped1 <- read_delim(UN_Linked_ped1_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(UN_Linked_ped1)
+```
+
+# All 50,000 simulated .ped files need to be corrected by restoring columns 3 (Mother ID) and 4 (Father ID)
+# using values from the original .ped file. This prepares the files for MERLIN analysis under the H1 (true unrelatedness) hypothesis.
+# The output files are saved with a "-fixed.ped" suffix.
+
+```{bash}
+# HPC
+
+$ nano Fixed_Peds.R
+```
+
+```{r}
+library(readr)
+library(dplyr)
+
+# Define input, output, and reference .ped file paths
+input_dir  <- "/scratch/users/k21040223/FC_Simulation/UN_Linked"
+output_dir <- "/scratch/users/k21040223/FC_Simulation/UN_Linked"
+orig_ped   <- "/scratch/users/k21040223/FC_Simulation/Original_Files/FC_10000.ped"
+n_reps     <- 50000
+
+# Get replicate ID from SLURM_ARRAY_TASK_ID
+args <- commandArgs(trailingOnly = TRUE)
+i    <- as.integer(args[1])
+id   <- sprintf("%05d", i)  # e.g., "00001"
+
+# Read the original .ped file to retrieve correct X3 (Mother) and X4 (Father) values
+orig <- read_delim(orig_ped, delim = "\t", col_names = FALSE, show_col_types = FALSE)
+colnames(orig) <- sprintf("X%d", seq_len(ncol(orig)))
+
+# Construct input and output file paths
+# Loop over all 50,000 (00001 - 50000) files
+in_fn  <- file.path(input_dir,  sprintf("merlin-00003898-%s-replicate.ped", id))
+out_fn <- file.path(output_dir, sprintf("UN_ped_%s-fixed.ped", id))
+
+# Skip if the input .ped file does not exist
+if (!file.exists(in_fn)) {
+  warning(sprintf("Skipping missing file: %s", in_fn))
+  quit(save = "no", status = 0)
+}
+
+# Read the simulated .ped file
+sim <- read_delim(in_fn, delim = "\t", col_names = FALSE, show_col_types = FALSE)
+colnames(sim) <- sprintf("X%d", seq_len(ncol(sim)))
+
+# Restore pedigree columns X3 and X4 for rows 3, 4, 7, and 8 from the original .ped file
+sim[c(3, 4, 7, 8), c("X3", "X4")] <- orig[c(3, 4, 7, 8), c("X3", "X4")]
+
+# Drop row 9 and column 9997 from the simulated file
+sim_clean <- slice(sim, -9)
+sim_clean <- select(sim_clean, -X9997)
+
+# 4) Write output
+write_delim(sim_clean, out_fn, delim = "\t", col_names = FALSE)
+```
+
+```{bash}
+# HPC
+
+# Create and edit the SLURM batch script
+$ nano Fixed_Peds_Array.sh
+
+#!/bin/bash
+#SBATCH --job-name=Fixed_Peds_Array
+#SBATCH --array=0-99
+#SBATCH --output=logs/Fixed_Peds_Array_%A_%a.out
+#SBATCH --error=logs/Fixed_Peds_Array_%A_%a.err
+#SBATCH --time=48:00:00
+#SBATCH --mem=16G
+
+module load r
+
+# Each task processes 500 files
+START=$(( SLURM_ARRAY_TASK_ID * 500 + 1 ))
+END=$(( START + 499 ))
+
+for i in $(seq $START $END); do
+  Rscript Fixed_Peds.R $i
+done
+
+# Submit the job to SLURM
+$ sbatch Fixed_Peds_Array.sh
+```
+
+# Verify structure of 1st fixed .ped
+
+```{r}
+# Define file paths
+Simulated_UN_ped1_modified_path <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FC_Simulation/UN_Linked/UN_ped_00001-fixed.ped"
+
+# Load the Linked file
+Simulated_UN_ped1_modified <- read_delim(Simulated_UN_ped1_modified_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Simulated_UN_ped1_modified)
+```
+
+# Run MERLIN to extract lnLikelihoods for TRUE Unrelated cases
+# This script loops over all 50,000 manipulated .ped files and saves the lnLikelihoods to individual files.
+# All extracted lnLikelihood values are also compiled into a single summary file for downstream processing.
+
+```{bash}
+# HPC
+
+$ nano UN_Linked_Fixed.sh
+
+#!/bin/bash
+#SBATCH --job-name=merlin_UN_Linked_Fixed
+#SBATCH --output=merlin_UN_Linked_Fixed.out
+#SBATCH --error=merlin_UN_Linked_Fixed.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=48:00:00
+
+# Load conda environment
+eval "$(conda shell.bash hook)"
+conda activate merlin_env
+
+# Set working directories
+BASE_DIR="/scratch/users/k21040223/FC_Simulation"
+PED_DIR="$BASE_DIR/UN_Linked"
+OUTPUT_DIR="$BASE_DIR/UN_Linked"
+ORIGINAL_FILES="$BASE_DIR/Original_Files"
+
+# Define marker and frequency files
+# Define random seed
+MARKER_DAT="$ORIGINAL_FILES/Updated_Kintelligence.dat"
+MARKER_MAP="$ORIGINAL_FILES/Updated_Kintelligence_Map_noX.map"
+FREQ_FILE="$ORIGINAL_FILES/Kintelligence_British_10000.freq"
+SEED=3898
+
+# Prepare summary file header
+OUTFILE="$OUTPUT_DIR/UN_Linked_lnlikelihoods.txt"
+echo -e "replicate\tlnlikelihood" > "$OUTFILE"
+
+# Create folder for storing individual lnLikelihood output files
+LNLIKELIHOOD_DIR="$OUTPUT_DIR/UN_Linked_lnlikelihoods"
+mkdir -p "$LNLIKELIHOOD_DIR"
+
+# Loop through all 50,000 replicates (00001–50000)
+for i in $(seq -f "%05g" 1 50000); do
+  PED_FILE="$PED_DIR/UN_ped${i}-fixed.ped"
+  LNLIKELIHOOD_FILE="$LNLIKELIHOOD_DIR/UN_ped${i}.lnlikelihood"
+
+# Check if .ped file exists before running MERLIN
+
+  if [[ -f "$PED_FILE" ]]; then
+    echo "Running Merlin for replicate $i …"
+
+    # Run Merlin to calculate lnlikelihood
+    merlin \
+      -p "$PED_FILE" \
+      -d "$MARKER_DAT" \
+      -m "$MARKER_MAP" \
+      -f "$FREQ_FILE" \
+      -r "$SEED" \
+      --likelihood \
+      --markerNames \
+    > "$LNLIKELIHOOD_FILE" 2>&1
+    
+     # Extract all lnlikelihood values (one per chromosome), sum them
+      LN_SUM=$(grep -i "lnlikelihood for" "$LNLIKELIHOOD_FILE" \
+      | awk -F'= *' '
+          {
+            split($2, tokens, " ")
+            sum += tokens[1]
+          }
+          END {
+            printf "%.3f", sum
+          }
+        ')
+
+    # Append to the summary file
+    echo -e "${i}\t${LN_SUM}" >> "$OUTFILE"
+
+  # If .ped file does not exist, log a warning and skip
+  else
+    echo "WARNING: $PED_FILE not found, skipping."
+  fi
+done
+
+# Final message upon completion
+echo "All done! See summary in $OUTFILE and full outputs in $LNLIKELIHOOD_DIR/"
+
+$ sbatch UN_Linked_Fixed.sh
+```
+

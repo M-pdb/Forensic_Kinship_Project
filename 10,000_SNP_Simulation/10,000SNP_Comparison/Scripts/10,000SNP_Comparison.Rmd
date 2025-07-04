@@ -1,0 +1,290 @@
+---
+title: "Comparison"
+output: html_document
+date: "2025-06-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+
+```{r}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+```
+
+# Performs log-likelihood ratio (logLR) computations for simulated Full Cousin vs Unrelated comparisons using 9,991 SNPs.
+# The pipeline:
+# - Extracts and transforms raw lnL values from Excel
+# - Computes logLRs, LRs, and log10LRs across four scenarios
+# - Outputs full results and summary statistics
+# - Visualises log10LR distributions using density plots
+#
+# Design choices ensure computational efficiency, reproducibility, and forensic relevance. Capped plots enhance interpretability by reducing skew from high-density peaks.
+
+```{r}
+# Load Excel file (skip first 3 rows; no headers)
+df <- read_excel("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000SNP_Comparison/Outputs/LBD Merlin Outputs HS-FC-UN.xlsx", skip = 3, col_names = FALSE)
+df$replicate <- 1:nrow(df)
+
+# Select relevant lnL columns manually by position
+# Columns P → Z = 16:26
+fc_lnL <- df %>%
+  mutate(
+    fc_unlinked       = df[[16]],
+    fc_unlinked_unr   = df[[17]],
+    fc_linked         = df[[19]],
+    fc_linked_unr     = df[[20]],
+    un_unlinked       = df[[22]],
+    un_unlinked_unr   = df[[23]],
+    un_linked         = df[[25]],
+    un_linked_unr     = df[[26]]
+  ) %>%
+  transmute(
+    replicate,
+    fc_unlinked,
+    fc_unlinked_unr,
+    fc_linked,
+    fc_linked_unr,
+    un_unlinked,
+    un_unlinked_unr,
+    un_linked,
+    un_linked_unr
+  ) %>%
+  mutate(
+    # logLRs
+    logLR_FC_linked     = fc_linked - fc_linked_unr,
+    logLR_FC_unlinked   = fc_unlinked - fc_unlinked_unr,
+    logLR_UN_linked     = un_linked - un_linked_unr,
+    logLR_UN_unlinked   = un_unlinked - un_unlinked_unr,
+
+    # LRs
+    LR_FC_linked     = exp(logLR_FC_linked),
+    LR_FC_unlinked   = exp(logLR_FC_unlinked),
+    LR_UN_linked     = exp(logLR_UN_linked),
+    LR_UN_unlinked   = exp(logLR_UN_unlinked),
+
+    # log10LRs
+    log10LR_FC_linked     = logLR_FC_linked / log(10),
+    log10LR_FC_unlinked   = logLR_FC_unlinked / log(10),
+    log10LR_UN_linked     = logLR_UN_linked / log(10),
+    log10LR_UN_unlinked   = logLR_UN_unlinked / log(10)
+  )
+
+# Save Full logLR Output
+write.table(fc_lnL, "SUPERVISOR_FCvUN_LR_full_output.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Compute min, median, max - exclude NaN/Inf values
+summary_stats_fc <- data.frame(
+  condition = c("FC_linked", "UN_linked", "FC_unlinked", "UN_unlinked"),
+  min = c(
+    min(fc_lnL$logLR_FC_linked[is.finite(fc_lnL$logLR_FC_linked)], na.rm = TRUE),
+    min(fc_lnL$logLR_UN_linked[is.finite(fc_lnL$logLR_UN_linked)], na.rm = TRUE),
+    min(fc_lnL$logLR_FC_unlinked[is.finite(fc_lnL$logLR_FC_unlinked)], na.rm = TRUE),
+    min(fc_lnL$logLR_UN_unlinked[is.finite(fc_lnL$logLR_UN_unlinked)], na.rm = TRUE)
+  ),
+  median = c(
+    median(fc_lnL$logLR_FC_linked[is.finite(fc_lnL$logLR_FC_linked)], na.rm = TRUE),
+    median(fc_lnL$logLR_UN_linked[is.finite(fc_lnL$logLR_UN_linked)], na.rm = TRUE),
+    median(fc_lnL$logLR_FC_unlinked[is.finite(fc_lnL$logLR_FC_unlinked)], na.rm = TRUE),
+    median(fc_lnL$logLR_UN_unlinked[is.finite(fc_lnL$logLR_UN_unlinked)], na.rm = TRUE)
+  ),
+  max = c(
+    max(fc_lnL$logLR_FC_linked[is.finite(fc_lnL$logLR_FC_linked)], na.rm = TRUE),
+    max(fc_lnL$logLR_UN_linked[is.finite(fc_lnL$logLR_UN_linked)], na.rm = TRUE),
+    max(fc_lnL$logLR_FC_unlinked[is.finite(fc_lnL$logLR_FC_unlinked)], na.rm = TRUE),
+    max(fc_lnL$logLR_UN_unlinked[is.finite(fc_lnL$logLR_UN_unlinked)], na.rm = TRUE)
+  )
+)
+
+# Save Full Summary Stat Output
+write.table(summary_stats_fc, "SUPERVISOR_FCvUN_logLR_summary_stats.txt", sep = "\t", row.names = FALSE)
+
+# Prepare data for plotting
+plot_data_fc <- fc_lnL %>%
+  transmute(
+    FC_linked = log10LR_FC_linked,
+    FC_unlinked = log10LR_FC_unlinked,
+    UN_linked = log10LR_UN_linked,
+    UN_unlinked = log10LR_UN_unlinked
+  ) %>%
+  pivot_longer(cols = everything(), names_to = "Group", values_to = "log10LR") %>%
+  filter(is.finite(log10LR))
+
+# Full plot
+p_full <- ggplot(plot_data_fc, aes(x = log10LR, fill = Group, colour = Group)) +
+  geom_density(alpha = 0.5, size = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Supervisor FC vs UN – Full log10LR Distribution (9991 SNPs)",
+    x = "log10LR", y = "Density"
+  ) +
+  theme_minimal() +
+  theme(legend.title = element_blank(), legend.position = "right")
+
+print(p_full)
+
+ggsave(
+  filename = "SUPERVISOR_FCvUN_log10LR_full.pdf",
+  plot = p_full,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+# Capped plot
+p_capped <- p_full +
+  coord_cartesian(ylim = c(0, 0.05)) +
+  labs(title = "Supervisor FC vs UN – Capped log10LR Distribution (9991 SNPs)")
+
+print(p_capped)
+
+ggsave(
+  filename = "SUPERVISOR_FCvUN_log10LR_ycapped.pdf",
+  plot = p_capped,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+```
+
+# Performs log-likelihood ratio (logLR) computations for simulated Half Siblings vs Unrelated comparisons using 9,991 SNPs.
+# The pipeline:
+# - Extracts and transforms raw lnL values from Excel
+# - Computes logLRs, LRs, and log10LRs across four scenarios
+# - Outputs full results and summary statistics
+# - Visualises log10LR distributions using density plots
+#
+# Design choices ensure computational efficiency, reproducibility, and forensic relevance. Capped plots enhance interpretability by reducing skew from high-density peaks.
+
+```{r}
+# Load Excel file (skip first 3 rows; no headers)
+df <- read_excel("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000SNP_Comparison/Outputs/LBD Merlin Outputs HS-FC-UN.xlsx", skip = 3, col_names = FALSE)
+df$replicate <- 1:nrow(df)
+
+# Select relevant lnL columns manually by position
+# Columns B → L = 2:12
+hs_lnL <- df %>%
+  mutate(
+    hs_unlinked       = df[[2]],
+    hs_unlinked_unr   = df[[3]],
+    hs_linked         = df[[5]],
+    hs_linked_unr     = df[[6]],
+    un_unlinked       = df[[8]],
+    un_unlinked_unr   = df[[9]],
+    un_linked         = df[[11]],
+    un_linked_unr     = df[[12]]
+  ) %>%
+  transmute(
+    replicate,
+    hs_unlinked,
+    hs_unlinked_unr,
+    hs_linked,
+    hs_linked_unr,
+    un_unlinked,
+    un_unlinked_unr,
+    un_linked,
+    un_linked_unr
+  ) %>%
+  mutate(
+    # logLRs
+    logLR_HS_linked     = hs_linked - hs_linked_unr,
+    logLR_HS_unlinked   = hs_unlinked - hs_unlinked_unr,
+    logLR_UN_linked     = un_linked - un_linked_unr,
+    logLR_UN_unlinked   = un_unlinked - un_unlinked_unr,
+
+    # LRs
+    LR_HS_linked     = exp(logLR_HS_linked),
+    LR_HS_unlinked   = exp(logLR_HS_unlinked),
+    LR_UN_linked     = exp(logLR_UN_linked),
+    LR_UN_unlinked   = exp(logLR_UN_unlinked),
+
+    # log10LRs
+    log10LR_HS_linked     = logLR_HS_linked / log(10),
+    log10LR_HS_unlinked   = logLR_HS_unlinked / log(10),
+    log10LR_UN_linked     = logLR_UN_linked / log(10),
+    log10LR_UN_unlinked   = logLR_UN_unlinked / log(10)
+  )
+
+# Save Full logLR Output
+write.table(hs_lnL, "SUPERVISOR_FCvUN_LR_full_output.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Compute min, median, max - exclude NaN/Inf values
+summary_stats_hs <- data.frame(
+  condition = c("HS_linked", "UN_linked", "HS_unlinked", "UN_unlinked"),
+  min = c(
+    min(hs_lnL$logLR_HS_linked[is.finite(hs_lnL$logLR_HS_linked)], na.rm = TRUE),
+    min(hs_lnL$logLR_UN_linked[is.finite(hs_lnL$logLR_UN_linked)], na.rm = TRUE),
+    min(hs_lnL$logLR_HS_unlinked[is.finite(hs_lnL$logLR_HS_unlinked)], na.rm = TRUE),
+    min(hs_lnL$logLR_UN_unlinked[is.finite(hs_lnL$logLR_UN_unlinked)], na.rm = TRUE)
+  ),
+  median = c(
+    median(hs_lnL$logLR_HS_linked[is.finite(hs_lnL$logLR_HS_linked)], na.rm = TRUE),
+    median(hs_lnL$logLR_UN_linked[is.finite(hs_lnL$logLR_UN_linked)], na.rm = TRUE),
+    median(hs_lnL$logLR_HS_unlinked[is.finite(hs_lnL$logLR_HS_unlinked)], na.rm = TRUE),
+    median(hs_lnL$logLR_UN_unlinked[is.finite(hs_lnL$logLR_UN_unlinked)], na.rm = TRUE)
+  ),
+  max = c(
+    max(hs_lnL$logLR_HS_linked[is.finite(hs_lnL$logLR_HS_linked)], na.rm = TRUE),
+    max(hs_lnL$logLR_UN_linked[is.finite(hs_lnL$logLR_UN_linked)], na.rm = TRUE),
+    max(hs_lnL$logLR_HS_unlinked[is.finite(hs_lnL$logLR_HS_unlinked)], na.rm = TRUE),
+    max(hs_lnL$logLR_UN_unlinked[is.finite(hs_lnL$logLR_UN_unlinked)], na.rm = TRUE)
+  )
+)
+
+# Save Full Summary Stat Output
+write.table(summary_stats_hs, "SUPERVISOR_HSvUN_logLR_summary_stats.txt", sep = "\t", row.names = FALSE)
+
+# Prepare data for plotting
+plot_data_hs <- hs_lnL %>%
+  transmute(
+    HS_linked = log10LR_HS_linked,
+    HS_unlinked = log10LR_HS_unlinked,
+    UN_linked = log10LR_UN_linked,
+    UN_unlinked = log10LR_UN_unlinked
+  ) %>%
+  pivot_longer(cols = everything(), names_to = "Group", values_to = "log10LR") %>%
+  filter(is.finite(log10LR))
+
+# Full plot
+p_full <- ggplot(plot_data_hs, aes(x = log10LR, fill = Group, colour = Group)) +
+  geom_density(alpha = 0.5, size = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Supervisor HS vs UN – Full log10LR Distribution (9991 SNPs)",
+    x = "log10LR", y = "Density"
+  ) +
+  theme_minimal() +
+  theme(legend.title = element_blank(), legend.position = "right")
+
+print(p_full)
+
+ggsave(
+  filename = "SUPERVISOR_HSvUN_log10LR_full.pdf",
+  plot = p_full,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+# Capped plot
+p_capped <- p_full +
+  coord_cartesian(ylim = c(0, 0.06)) +
+  labs(title = "Supervisor HS vs UN – Capped log10LR Distribution (9991 SNPs)")
+
+print(p_capped)
+
+ggsave(
+  filename = "SUPERVISOR_HSvUN_log10LR_ycapped.pdf",
+  plot = p_capped,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+```
+

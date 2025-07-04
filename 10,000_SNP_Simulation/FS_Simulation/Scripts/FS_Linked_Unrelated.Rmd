@@ -1,0 +1,271 @@
+---
+title: "FS_Linked_Unrelated"
+output: html_document
+date: "2025-06-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+# The 50,000 .ped files from the FS_Linked simulation are manipulated to simulate unrelated individuals.
+# This is done by:
+# 1) Breaking familial relationships by setting columns 3 (Mother ID) and 4 (Father ID) to 0.
+# 2) Removing extra rows/columns added during simulation.
+# 3) Standardising each .ped file to contain only two unrelated individuals:
+#    - First 5 columns fixed
+#    - Remaining columns: genotypes from each simulated .ped file
+# This is done as an Array (vectorised operation) for efficiency
+
+```{bash}
+# HPC
+
+$ nano FS_Linked_Manipulation.R
+```
+
+```{r}
+library(dplyr)
+library(readr)
+
+# Parse command line arguments to allow batch array execution
+args <- commandArgs(trailingOnly = TRUE)
+start_index <- as.integer(args[1])
+end_index   <- as.integer(args[2])
+
+# Set the directories, input directory is where the FS_Linked simulated .peds are stored and the output directory is where the manipulated .peds will be stored
+in_dir  <- "/scratch/users/k21040223/FS_Simulation/FS_Linked"
+out_dir <- "/scratch/users/k21040223/FS_Simulation/FS_Linked_Unrelated"
+
+# Create the output directory if it doesn’t exist
+if (!dir.exists(out_dir)) dir.create(out_dir)
+
+# Define the transformation as a function
+process_ped <- function(in_ped_path, out_ped_path) {
+  df <- read_delim(in_ped_path, delim = "\t", col_names = FALSE)
+  
+  df_mod <- df %>%
+    
+    # Set X3 and X4 (mother and father IDs) to 0 to break any pedigree structure
+    mutate(X3 = 0, X4 = 0) %>%
+    
+     # Shift genotypes from rows 3 and 4 to become the first two rows (representing two     unrelated individuals)
+    { tmp <- .
+      cols_to_shift <- 6:ncol(tmp)
+      tmp[1, cols_to_shift] <- tmp[3, cols_to_shift]
+      tmp[2, cols_to_shift] <- tmp[4, cols_to_shift]
+      tmp
+    } %>%
+    
+    # Drop all original rows except the newly reassigned unrelated pair (keep only rows 1 and 2)
+    slice(-c(3,4,5)) %>%
+    
+    # Drop column X9997 (presumably an extra column from simulation output)
+    select(-X9997)
+
+  # Write the modified .ped file to the output directory
+  write_delim(df_mod, out_ped_path, delim = "\t", col_names = FALSE)
+}
+
+# Loop through specified replicates and apply transformation
+for (i in start_index:end_index) {
+  index <- sprintf("%05d", i)
+
+  in_file  <- file.path(in_dir,  sprintf("merlin-00003898-%s-replicate.ped", index))
+  out_file <- file.path(out_dir, sprintf("merlin-00003898-%s-replicate_UN.ped", index))
+
+  if (file.exists(in_file)) {
+    process_ped(in_file, out_file)
+  }
+}
+
+```
+
+```{bash}
+# HPC
+
+# Create and edit the SLURM batch script
+$ nano FS_Linked_Manipulation_Array.sh
+
+!/bin/bash
+#SBATCH --job-name=FS_Linked_Manipulation_Array
+#SBATCH --array=0-99
+#SBATCH --output=FS_Linked_Manipulation_Array_%a.out
+#SBATCH --error=FS_Linked_Manipulation_Array_%a.err
+#SBATCH --time=48:00:00
+#SBATCH --mem=16G
+
+module load r
+
+# Each task processes 500 files
+START=$(( SLURM_ARRAY_TASK_ID * 500 + 1 ))
+END=$(( START + 499 ))
+
+$(which Rscript) FS_Linked_Manipulation.R $START $END
+
+# Submit the job to SLURM
+$ sbatch FS_Linked_Manipulation_Array.sh
+```
+
+# Verify 1st manipulated .ped File
+
+```{r}
+# Define file paths
+Manipulated_FS_Ped1_path <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/FS_Linked_Unrelated/merlin-00003898-00001-replicate_UN.ped"
+
+# Load the Linked file
+Manipulated_FS_Ped1 <- read_delim(Manipulated_FS_Ped1_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Manipulated_FS_Ped1)
+```
+
+# Verify 2nd simulated .ped File
+
+```{r}
+# Define file paths
+FS_Linked_ped2_path <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/FS_Linked/merlin-00003898-00002-replicate.ped"
+
+# Load the Linked file
+FS_Linked_ped2 <- read_delim(FS_Linked_ped2_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(FS_Linked_ped2)
+```
+
+# Verify 2nd manipulated .ped File
+
+```{r}
+# Define file paths
+Manipulated_FS_Ped2_path <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/FS_Linked_Unrelated/merlin-00003898-00002-replicate_UN.ped"
+
+# Load the Linked file
+Manipulated_FS_Ped2 <- read_delim(Manipulated_FS_Ped2_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Manipulated_FS_Ped2)
+```
+
+# Verify 36792 simulated .ped File
+
+```{r}
+# Define file paths
+FS_Linked_ped36792_path <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/FS_Linked/merlin-00003898-36792-replicate.ped"
+
+# Load the Linked file
+FS_Linked_ped36792 <- read_delim(FS_Linked_ped36792_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(FS_Linked_ped36792)
+```
+
+# Verify 36792 manipulated .ped File
+
+```{r}
+# Define file paths
+Manipulated_FS_Ped36792_path <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/FS_Linked_Unrelated/merlin-00003898-36792-replicate_UN.ped"
+
+# Load the Linked file
+Manipulated_FS_Ped36792 <- read_delim(Manipulated_FS_Ped36792_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Manipulated_FS_Ped36792)
+```
+
+# Run MERLIN to extract lnLikelihoods for unrelated cases
+# Note: We are not re-simulating — genotypes must remain consistent between FS_Linked and FS_Linked_Unrelated.
+# This script loops over all 50,000 manipulated .ped files and saves the lnLikelihoods to individual files.
+# All extracted lnLikelihood values are also compiled into a single summary file for downstream processing.
+
+```{bash}
+#HPC
+
+$ nano FS_Linked_Unrelated.sh
+
+#!/bin/bash
+#SBATCH --job-name=merlin_FS_Linked_Unrelated
+#SBATCH --output=merlin_FS_Linked_Unrelated.out
+#SBATCH --error=merlin_FS_Linked_Unrelated.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=48:00:00
+
+# Load conda environment
+eval "$(conda shell.bash hook)"
+conda activate merlin_env
+
+# Set working directories
+BASE_DIR="/scratch/users/k21040223/FS_Simulation"
+PED_DIR="$BASE_DIR/FS_Linked_Unrelated"
+OUTPUT_DIR="$BASE_DIR/FS_Linked_Unrelated"
+ORIGINAL_FILES="$BASE_DIR/Original_Files"
+
+# Define marker and frequency files
+# Define random seed
+MARKER_DAT="$ORIGINAL_FILES/Updated_Kintelligence.dat"
+MARKER_MAP="$ORIGINAL_FILES/Updated_Kintelligence_Map_noX.map"
+FREQ_FILE="$ORIGINAL_FILES/Kintelligence_British_10000.freq"
+SEED=3898
+
+# Prepare summary file header
+OUTFILE="$OUTPUT_DIR/FS_Linked_Unrelated_lnlikelihoods.txt"
+echo -e "replicate\ttotal_lnlikelihood" > "$OUTFILE"
+
+# Create folder for storing individual lnLikelihood output files
+LNLIKELIHOOD_DIR="$OUTPUT_DIR/FS_Linked_Unrelated_lnlikelihoods"
+mkdir -p "$LNLIKELIHOOD_DIR"
+
+# Loop through all 50,000 replicates (00001–50000)
+for i in $(seq -f "%05g" 1 50000); do
+  PED_FILE="$PED_DIR/merlin-00003898-${i}-replicate_UN.ped"
+  LNLIKELIHOOD_FILE="$LNLIKELIHOOD_DIR/merlin-00003898-${i}.lnlikelihood"
+
+# Check if .ped file exists before running MERLIN
+
+  if [[ -f "$PED_FILE" ]]; then
+    echo "Running Merlin for replicate $i …"
+
+    # Run Merlin to calculate lnlikelihood
+    merlin \
+      -p "$PED_FILE" \
+      -d "$MARKER_DAT" \
+      -m "$MARKER_MAP" \
+      -f "$FREQ_FILE" \
+      -r "$SEED" \
+      --likelihood \
+      --markerNames \
+      > "$LNLIKELIHOOD_FILE" 2>&1
+
+    # Extract all lnlikelihood values (one per chromosome), sum them
+      LN_SUM=$(grep -i "lnlikelihood for" "$LNLIKELIHOOD_FILE" \
+      | awk -F'= *' '
+          {
+            split($2, tokens, " ")
+            sum += tokens[1]
+          }
+          END {
+            printf "%.3f", sum
+          }
+        ')
+
+    # Append to the summary file
+    echo -e "${i}\t${LN_SUM}" >> "$OUTFILE"
+
+  # If .ped file does not exist, log a warning and skip
+  else
+    echo "WARNING: $PED_FILE not found, skipping."
+  fi
+done
+
+# Final message upon completion
+echo "All done! See summary in $OUTFILE and full outputs in $LNLIKELIHOOD_DIR/"
+
+$ sbatch FS_Linked_Unrelated.sh
+```

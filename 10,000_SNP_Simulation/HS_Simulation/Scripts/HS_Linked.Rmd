@@ -1,0 +1,139 @@
+---
+title: "HS_Linked"
+output: html_document
+date: "2025-06-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# NOTE: All simulations, file manipulations, and batch computations (e.g., LR generation, pedigree edits, and data summarisation) were conducted on a HPC system due to local memory and storage constraints.
+# Output and intermediate files were transferred to a local environment for visualisation and downstream analysis in R, leveraging RStudio’s improved interactivity and data inspection capabilities.
+
+# Load Packages
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+# Verify original .ped File
+
+```{r}
+# Define file paths
+HS_Linked_ped1_path <- "/Users/huncho/Desktop/Forensic_Kinship_Project/10,000_SNPs/HS_Simulation/Input_Files/HS_10000.ped"
+
+# Load the Linked file
+Original_HS_ped <- read_delim(HS_Linked_ped1_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Original_HS_ped)
+```
+
+# Simulation:
+# MERLIN was installed in a dedicated conda environment to ensure reproducibility and compatibility with simulation tools.
+# The SLURM batch script (merlin_HS_Linked.sh) is configured to simulate 50,000 replicates 
+# Outputs are saved with a defined prefix for downstream kinship analysis.
+
+```{bash}
+# HPC
+
+# Create a conda environment and install MERLIN (v1.1.2) for reproducible execution
+$ conda create -n merlin_env -c bioconda -c 
+$ conda-forge merlin=1.1.2 -y
+```
+
+```{bash}
+# HPC
+# Prepare and submit SLURM batch script for MERLIN simulation
+
+$ nano merlin_HS_Linked.sh
+
+#!/bin/bash
+
+# SLURM job settings
+#SBATCH --job-name=merlin_HS_Linked
+#SBATCH --output=merlin_HS_Linked.out
+#SBATCH --error=merlin_HS_Linked.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=48:00:00
+
+# Load conda environment
+eval "$(conda shell.bash hook)"
+conda activate merlin_env
+
+# Move to working directory containing simulation inputs
+cd /scratch/users/k21040223/HS_Simulation/HS_Linked
+
+# Simulate MERLIN
+merlin -p ../Original_Files/HS_10000.ped -d ../Original_Files/Updated_Kintelligence.dat -m ../Original_Files/Updated_Kintelligence_Map_noX.map -f ../Original_Files/Kintelligence_British_10000.freq -r 3898 --simulate --reruns 50000 --likelihood --information --markerNames --quiet --save --prefix HS_Linked/HS_Linked > likelihoods_HS_Linked_summary.txt
+
+# Submit job to HPC
+$ sbatch merlin_HS_Linked.sh
+```
+
+# MERLIN outputs per-iteration lnlikelihoods for each chromosome (22 in total)
+# So each of the 50,000 simulations generates 22 ln(L) values, one per chromosome
+# Need to sum every set of 22 consecutive values (representing one simulation)
+# Output the replicate number and total ln(L) to a clean summary file
+
+```{bash}
+# HPC
+
+# Create and edit the SLURM batch script
+$ nano sum_lnlikelihoods.sh
+
+#!/bin/bash
+#SBATCH --job-name=sum_lnlikelihoods
+#SBATCH --output=sum_lnlikelihoods.out
+#SBATCH --error=sum_lnlikelihoods.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=16GB
+#SBATCH --time=48:00:00
+
+# Set input/output paths
+INFILE="/scratch/users/k21040223/HS_Simulation/HS_Linked/likelihoods_HS_Linked_summary.txt"
+OUTFILE="/scratch/users/k21040223/HS_Simulation/HS_Linked/HS_Linked_lnlikelihoods.txt"
+
+# Write header line to output
+echo -e "replicate\ttotal_lnlikelihood" > "$OUTFILE"
+
+# AWK script: extract and sum lnL per simulation (22 values per replicate)
+awk '
+  $0 ~ /likelihood/ {
+    # Split line by "=" and take the second part (after the equals sign)
+    split($0, parts, "=")
+    lnL = parts[2] + 0     # force to numeric (automatically strips spaces, text)
+    sum += lnL
+    count++
+
+    if (count == 22) {
+      printf "%05d\t%.3f\n", ++rep, sum >> "'"$OUTFILE"'"
+      sum = 0
+      count = 0
+    }
+  }
+' "$INFILE"
+
+echo "Finished. Output written to $OUTFILE"
+
+# Submit the job to SLURM
+$ sbatch sum_lnlikelihoods.sh
+```
+
+# Verify 1st simulated .ped File
+
+```{r}
+# Define file paths
+HS_Linked_ped1_path <- "/Users/huncho/Desktop/Forensic_Kinship_Project/10,000_SNPs/HS_Simulation/HS_Linked/merlin-00003898-00001-replicate.ped"
+
+# Load the Linked file
+HS_Linked_ped1 <- read_delim(HS_Linked_ped1_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(HS_Linked_ped1)
+```

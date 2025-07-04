@@ -1,0 +1,170 @@
+MERLIN 1.1.2 - (c) 2000-2007 Goncalo Abecasis
+
+References for this version of Merlin:
+
+   Abecasis et al (2002) Nat Gen 30:97-101        [original citation]
+   Fingerlin et al (2004) AJHG 74:432-43          [case selection for association studies]
+   Abecasis and Wigginton (2005) AJHG 77:754-67   [ld modeling, parametric analyses]
+   Fingerlin et al (2006) Gen Epidemiol 30:384-96 [sex-specific maps]
+   Chen and Abecasis (2007) AJHG 81:913-26        [qtl association analysis, qtl simulation]
+
+
+The following parameters are in effect:
+                     Data File : Updated_Kintelligence.dat (-dname)
+                 Pedigree File :      B_D_HS.ped (-pname)
+            Missing Value Code :         -99.999 (-xname)
+                      Map File : Updated_Kintelligence_Map_noX.map (-mname)
+            Allele Frequencies : Kintelligence_British_10000.freq (-f[a|e|f|m|file])
+                   Random Seed :          123456 (-r9999)
+
+Data Analysis Options
+         General : --error, --information, --likelihood [ON],
+                   --model [param.tbl]
+      IBD States : --ibd, --kinship, --matrices, --extended, --select
+     NPL Linkage : --npl, --pairs, --qtl, --deviates, --exp
+      VC Linkage : --vc, --useCovariates, --ascertainment, --unlinked [0.00]
+     Association : --infer, --assoc, --fastAssoc, --filter, --custom [cov.tbl]
+     Haplotyping : --best, --sample, --all, --founders, --horizontal
+   Recombination : --zero, --one, --two, --three, --singlepoint
+       Positions : --steps, --maxStep, --minStep, --grid, --start, --stop
+     LD Clusters : --clusters [], --distance, --rsq, --cfreq
+          Limits : --bits [24], --megabytes, --minutes
+     Performance : --trim, --noCoupleBits, --swap, --smallSwap
+          Output : --quiet, --markerNames [ON], --frequencies, --perFamily,
+                   --pdf, --tabulate, --prefix [merlin]
+      Simulation : --simulate, --reruns, --save, --trait []
+
+
+Analysing Chromosome 1
+
+
+lnLikelihood for 1 families (0 skipped) = -1655.153
+
+
+Analysing Chromosome 2
+
+
+lnLikelihood for 1 families (0 skipped) = -1538.062
+
+
+Analysing Chromosome 3
+
+
+lnLikelihood for 1 families (0 skipped) = -1325.624
+
+
+Analysing Chromosome 4
+
+
+lnLikelihood for 1 families (0 skipped) = -1216.729
+
+
+Analysing Chromosome 5
+
+
+lnLikelihood for 1 families (0 skipped) = -1208.730
+
+
+Analysing Chromosome 6
+
+
+lnLikelihood for 1 families (0 skipped) = -1185.492
+
+
+Analysing Chromosome 7
+
+
+lnLikelihood for 1 families (0 skipped) = -1076.711
+
+
+Analysing Chromosome 8
+
+
+lnLikelihood for 1 families (0 skipped) = -959.699
+
+
+Analysing Chromosome 9
+
+
+lnLikelihood for 1 families (0 skipped) = -920.204
+
+
+Analysing Chromosome 10
+
+
+lnLikelihood for 1 families (0 skipped) = -1013.873
+
+
+Analysing Chromosome 11
+
+
+lnLikelihood for 1 families (0 skipped) = -937.134
+
+
+Analysing Chromosome 12
+
+
+lnLikelihood for 1 families (0 skipped) = -1008.951
+
+
+Analysing Chromosome 13
+
+
+lnLikelihood for 1 families (0 skipped) = -738.242
+
+
+Analysing Chromosome 14
+
+
+lnLikelihood for 1 families (0 skipped) = -715.936
+
+
+Analysing Chromosome 15
+
+
+lnLikelihood for 1 families (0 skipped) = -693.425
+
+
+Analysing Chromosome 16
+
+
+lnLikelihood for 1 families (0 skipped) = -751.797
+
+
+Analysing Chromosome 17
+
+
+lnLikelihood for 1 families (0 skipped) = -701.036
+
+
+Analysing Chromosome 18
+
+
+lnLikelihood for 1 families (0 skipped) = -682.466
+
+
+Analysing Chromosome 19
+
+
+lnLikelihood for 1 families (0 skipped) = -538.709
+
+
+Analysing Chromosome 20
+
+
+lnLikelihood for 1 families (0 skipped) = -595.385
+
+
+Analysing Chromosome 21
+
+
+lnLikelihood for 1 families (0 skipped) = -362.001
+
+
+Analysing Chromosome 22
+
+
+lnLikelihood for 1 families (0 skipped) = -361.311
+
+
+

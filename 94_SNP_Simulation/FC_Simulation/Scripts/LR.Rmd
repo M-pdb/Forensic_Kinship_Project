@@ -1,0 +1,257 @@
+---
+title: "LR"
+output: html_document
+date: "2025-06-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+# Extract lnLikelihood values from the FC_Linked summary file across all 50,000 iterations
+# Save them as a single tab-delimited text file for further analysis
+
+```{r}
+# Define input summary file and output table path
+in_summary  <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/FC_Linked/likelihoods_FC_Linked_summary.txt"
+out_table   <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/FC_Linked/FC_Linked_lnlikelihoods.txt"
+
+# Read all lines from the input summary file
+lines <- read_lines(in_summary)
+
+# Keep only lines containing the phrase "lnLikelihood for 1 families"
+keep   <- grep("(?i)lnLikelihood for 1 families", lines, perl = TRUE)
+lines2  <- lines[keep]
+
+# Extract the numeric value after "=" from each line
+# e.g., from "... = -184.339" we extract "-184.339"
+# Split each line at "=" and trim the numeric part
+lnL <- sapply(strsplit(lines2, "="), function(x) trimws(x[2]))
+
+# Build a tibble data frame with replicate numbers and corresponding lnLikelihood values
+FC <- tibble(
+  replicate    = sprintf("%05d", seq_along(lnL)),
+  lnlikelihood = as.numeric(lnL)
+)
+
+# Write the table to file as a tab-delimited .txt
+write_delim(FC, out_table, delim = "\t", col_names = TRUE)
+
+```
+
+# Compute likelihood ratios (LRs) and log10LRs using lnLikelihood values
+# from both linked and unlinked kinship models across all replicates
+
+```{r}
+# Define file paths for all four lnLikelihood datasets:
+# - FC_Linked vs FC_Linked_Unrelated (with linkage)
+# - FC_Unlinked vs FC_Unlinked_Unrelated (no linkage)
+FC_linked_fn         <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/FC_Linked/FC_Linked_lnlikelihoods.txt"
+FC_linked_unrel_fn   <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/FC_Linked_Unrelated/FC_Linked_Unrelated_lnlikelihoods.txt"
+FC_unlinked_fn       <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/FC_Unlinked/FC_Unlinked_lnlikelihoods.txt"
+FC_unlinked_unrel_fn <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/FC_Unlinked_Unrelated/FC_Unlinked_Unrelated_lnlikelihoods.txt"
+
+# Read each lnLikelihood file into a tibble
+# Skip the header line and assign consistent column names and types
+FC_linked <- read_tsv(
+  FC_linked_fn,
+  skip      = 1,
+  col_names = c("replicate","lnL_FC_Linked"),
+  col_types = cols(
+    replicate       = col_character(),
+    lnL_FC_Linked   = col_double()
+  )
+)
+
+FC_linked_unrel <- read_tsv(
+  FC_linked_unrel_fn,
+  skip      = 1,
+  col_names = c("replicate","lnL_FC_Linked_Unrelated"),
+  col_types = cols(
+    replicate                 = col_character(),
+    lnL_FC_Linked_Unrelated   = col_double()
+  )
+)
+
+FC_unlinked <- read_tsv(
+  FC_unlinked_fn,
+  skip      = 1,
+  col_names = c("replicate","lnL_FC_Unlinked"),
+  col_types = cols(
+    replicate       = col_character(),
+    lnL_FC_Unlinked = col_double()
+  )
+)
+
+FC_unlinked_unrel <- read_tsv(
+  FC_unlinked_unrel_fn,
+  skip      = 1,
+  col_names = c("replicate","lnL_FC_Unlinked_Unrelated"),
+  col_types = cols(
+    replicate                   = col_character(),
+    lnL_FC_Unlinked_Unrelated   = col_double()
+  )
+)
+
+# Join all four datasets by the replicate ID
+# Creates a single tibble with lnLikelihoods for each comparison
+LR_FC <- FC_linked %>%
+  left_join(FC_linked_unrel,   by="replicate") %>%
+  left_join(FC_unlinked,       by="replicate") %>%
+  left_join(FC_unlinked_unrel, by="replicate")
+
+# Calculate natural-log likelihood ratios (lnLRs) for both linked and unlinked models:
+# lnLR = lnL(H1) - lnL(H0)
+#
+# Then convert lnLRs to:
+# - plain likelihood ratios (LR = exp(lnLR))
+# - base-10 log likelihood ratios (log10LR = lnLR / log(10))
+LR_FC <- LR_FC %>%
+  mutate(
+    # natural‐log LRs
+    logLR_linked   = lnL_FC_Linked   - lnL_FC_Linked_Unrelated,
+    logLR_unlinked = lnL_FC_Unlinked  - lnL_FC_Unlinked_Unrelated,
+
+    # plain LRs
+    LR_linked      = exp(logLR_linked),
+    LR_unlinked    = exp(logLR_unlinked),
+
+    # optional base‐10 logs
+    log10LR_linked   = logLR_linked   / log(10),
+    log10LR_unlinked = logLR_unlinked / log(10)
+  )
+
+# Generate summary statistics (median, min, max) for log10LR values
+# For both linked and unlinked models
+summary_FC <- tibble(
+  scenario     = c("linked","unlinked"),
+  median_logLR = c(
+    median(LR_FC$log10LR_linked,   na.rm=TRUE),
+    median(LR_FC$log10LR_unlinked, na.rm=TRUE)
+  ),
+  min_logLR    = c(
+    min(LR_FC$log10LR_linked,   na.rm=TRUE),
+    min(LR_FC$log10LR_unlinked, na.rm=TRUE)
+  ),
+  max_logLR    = c(
+    max(LR_FC$log10LR_linked,   na.rm=TRUE),
+    max(LR_FC$log10LR_unlinked, na.rm=TRUE)
+  )
+)
+
+# Save the full LR results and summary statistics to .txt files
+write_tsv(LR_FC,       "FC_all_LR_results.txt")
+write_tsv(summary_FC,   "FC_LR_summary_stats.txt")
+
+```
+
+
+```{r}
+# Define file paths for all four lnLikelihood datasets:
+# - UN_Linked vs UN_Linked_Unrelated (with linkage)
+# - UN_Unlinked vs UN_Unlinked_Unrelated (no linkage)
+UN_linked_fn         <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/UN_Linked/UN_Linked_lnlikelihoods.txt"
+UN_linked_unrel_fn   <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/UN_Linked_Unrelated/UN_Linked_Unrelated_lnlikelihoods.txt"
+UN_unlinked_fn       <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/UN_Unlinked/UN_Unlinked_lnlikelihoods.txt"
+UN_unlinked_unrel_fn <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/UN_Unlinked_Unrelated/UN_Unlinked_Unrelated_lnlikelihoods.txt"
+
+# Read each lnLikelihood file into a tibble
+# Skip the header line and assign consistent column names and types
+UN_linked <- read_tsv(
+  UN_linked_fn,
+  skip      = 1,
+  col_names = c("replicate","lnL_UN_Linked"),
+  col_types = cols(
+    replicate       = col_character(),
+    lnL_UN_Linked   = col_double()
+  )
+)
+
+UN_linked_unrel <- read_tsv(
+  UN_linked_unrel_fn,
+  skip      = 1,
+  col_names = c("replicate","lnL_UN_Linked_Unrelated"),
+  col_types = cols(
+    replicate                 = col_character(),
+    lnL_UN_Linked_Unrelated   = col_double()
+  )
+)
+
+UN_unlinked <- read_tsv(
+  UN_unlinked_fn,
+  skip      = 1,
+  col_names = c("replicate","lnL_UN_Unlinked"),
+  col_types = cols(
+    replicate       = col_character(),
+    lnL_UN_Unlinked = col_double()
+  )
+)
+
+UN_unlinked_unrel <- read_tsv(
+  UN_unlinked_unrel_fn,
+  skip      = 1,
+  col_names = c("replicate","lnL_UN_Unlinked_Unrelated"),
+  col_types = cols(
+    replicate                   = col_character(),
+    lnL_UN_Unlinked_Unrelated   = col_double()
+  )
+)
+
+# Join all four datasets by the replicate ID
+# Creates a single tibble with lnLikelihoods for each comparison
+LR_UN <- UN_linked %>%
+  left_join(UN_linked_unrel,   by="replicate") %>%
+  left_join(UN_unlinked,       by="replicate") %>%
+  left_join(UN_unlinked_unrel, by="replicate")
+
+# Calculate natural-log likelihood ratios (lnLRs) for both linked and unlinked models:
+# lnLR = lnL(H1) - lnL(H0)
+#
+# Then convert lnLRs to:
+# - plain likelihood ratios (LR = exp(lnLR))
+# - base-10 log likelihood ratios (log10LR = lnLR / log(10))
+LR_UN <- LR_UN %>%
+  mutate(
+    # natural‐log LRs
+    logLR_linked   = lnL_UN_Linked   - lnL_UN_Linked_Unrelated,
+    logLR_unlinked = lnL_UN_Unlinked  - lnL_UN_Unlinked_Unrelated,
+
+    # plain LRs
+    LR_linked      = exp(logLR_linked),
+    LR_unlinked    = exp(logLR_unlinked),
+
+    # optional base‐10 logs
+    log10LR_linked   = logLR_linked   / log(10),
+    log10LR_unlinked = logLR_unlinked / log(10)
+  )
+
+# Generate summary statistics (median, min, max) for log10LR values
+# For both linked and unlinked models
+summary_UN <- tibble(
+  scenario     = c("linked","unlinked"),
+  median_logLR = c(
+    median(LR_UN$log10LR_linked,   na.rm=TRUE),
+    median(LR_UN$log10LR_unlinked, na.rm=TRUE)
+  ),
+  min_logLR    = c(
+    min(LR_UN$log10LR_linked,   na.rm=TRUE),
+    min(LR_UN$log10LR_unlinked, na.rm=TRUE)
+  ),
+  max_logLR    = c(
+    max(LR_UN$log10LR_linked,   na.rm=TRUE),
+    max(LR_UN$log10LR_unlinked, na.rm=TRUE)
+  )
+)
+
+# Save the full LR results and summary statistics to .txt files
+write_tsv(LR_UN,       "UN_all_LR_results.txt")
+write_tsv(summary_UN,   "UN_LR_summary_stats.txt")
+
+```

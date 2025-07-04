@@ -1,0 +1,291 @@
+---
+title: "Cases"
+output: html_document
+date: "2025-06-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(readxl)
+```
+
+# This script automates the generation of space-delimited .ped files for different pairwise genotype comparisons across FC, HS, and UN case categories. 
+# It extracts alleles from an Excel genotype matrix, maps them to the final two rows of a fixed pedigree structure and writes them in.
+# The result is a set of .ped files ready for kinship inference.
+
+```{r}
+# File paths
+ped_file    <- "/Users/huncho/Desktop/Forensic_Kinship/Cases/ped_files_template.xlsx"
+allele_file <- "/Users/huncho/Desktop/Forensic_Kinship/Cases/White British Case Genotypes.xlsx"
+output_dir  <- "/Users/huncho/Desktop/Forensic_Kinship/Cases/Input_Files"       
+
+
+# Read in the allele data for A, B, C, D (skip the header row)
+allele_data <- read_excel(
+  allele_file,
+  sheet    = "Sheet1",
+  skip     = 1,
+  col_names = c("AlleleType","Marker","A","B","C","D")
+)
+
+# sanity check: must have an even number of rows (two per SNP)
+stopifnot(nrow(allele_data) %% 2 == 0)
+n_snps <- nrow(allele_data) / 2
+
+# build a simple vector of length 2* the number of snps for each individual
+# (rows already alternate Allele1, Allele2, Don’t re-interleave)
+alleles_list <- lapply(c("A","B","C","D"), function(ind) {
+  as.character(allele_data[[ind]])
+})
+names(alleles_list) <- c("A","B","C","D")
+
+
+# Define the six ordered pairs and the three pedigree sheets
+pairs  <- list(c("A","B"), c("A","C"), c("A","D"),
+               c("B","C"), c("B","D"),
+               c("C","D"))
+sheets <- c("FC","HS","UN")
+
+# Loop over each sheet & each pair → build and write .ped
+for(sheet in sheets) {
+  # read the first five columns (the fixed pedigree structure)
+  ped_meta <- read_excel(ped_file, sheet = sheet, col_names = FALSE)[,1:5]
+  colnames(ped_meta) <- c("FID","IID","PID","MID","Sex")
+  ped_meta <- as.data.frame(ped_meta, stringsAsFactors = FALSE)
+  
+  n_ind <- nrow(ped_meta)
+  row1  <- n_ind - 1    # the penultimate row: Allele1 for our pair
+  row2  <- n_ind        # the final row: Allele2 for our pair
+  
+  for(pb in pairs) {
+    p1 <- pb[1]; p2 <- pb[2]
+    
+    # initialize an all-"0" genotype matrix
+    geno_mat <- matrix(
+      "0",
+      nrow = n_ind,
+      ncol = 2 * n_snps,
+      dimnames = NULL
+    )
+    
+    # fill only the last two rows with the proper allele vectors
+    geno_mat[row1, ] <- alleles_list[[p1]]
+    geno_mat[row2, ] <- alleles_list[[p2]]
+    
+    # combine pedigree metadata + genotypes
+    out_df <- cbind(ped_meta, as.data.frame(geno_mat, stringsAsFactors = FALSE))
+    
+    # write out as space-delimited .ped (no row or col names, no quotes)
+    fn <- file.path(output_dir, sprintf("%s_%s_%s.ped", p1, p2, sheet))
+    write.table(
+      out_df,
+      file      = fn,
+      sep       = " ",
+      row.names = FALSE,
+      col.names = FALSE,
+      quote     = FALSE
+    )
+    message("Wrote ", fn)
+  }
+}
+```
+
+# Display some of the .ped files to verify correct formation
+
+```{r}
+# point to .ped file directory
+ped_dir <- "/Users/huncho/Desktop/Forensic_Kinship/Cases/Input_Files"       
+
+# Select .ped to view
+ped_ABFC <- file.path(ped_dir, "A_B_FC.ped")
+
+# read it in (no header, space-delimited)
+ped_ABFC <- read.table(ped_ABFC, header = FALSE, stringsAsFactors = FALSE)
+
+View(ped_ABFC)
+
+```
+
+```{r}
+# point to .ped file directory
+ped_dir <- "/Users/huncho/Desktop/Forensic_Kinship/Cases/Input_Files"       
+
+# Select .ped to view
+ped_ABHS <- file.path(ped_dir, "A_B_HS.ped")
+
+# read it in (no header, space-delimited)
+ped_ABHS <- read.table(ped_ABHS, header = FALSE, stringsAsFactors = FALSE)
+
+View(ped_ABHS)
+
+```
+
+```{r}
+# point to .ped file directory
+ped_dir <- "/Users/huncho/Desktop/Forensic_Kinship/Cases/Input_Files"       
+
+# Select .ped to view
+ped_ABUN <- file.path(ped_dir, "A_B_UN.ped")
+
+# read it in (no header, space-delimited)
+ped_ABUN <- read.table(ped_ABUN, header = FALSE, stringsAsFactors = FALSE)
+
+View(ped_ABUN)
+
+```
+
+```{r}
+# point to .ped file directory
+ped_dir <- "/Users/huncho/Desktop/Forensic_Kinship/Cases/Input_Files"       
+
+# Select .ped to view
+ped_BDUN <- file.path(ped_dir, "B_D_UN.ped")
+
+# read it in (no header, space-delimited)
+ped_BDUN <- read.table(ped_BDUN, header = FALSE, stringsAsFactors = FALSE)
+
+View(ped_BDUN)
+
+```
+
+# This script performs the following:
+# 1. Reads genotype allele data and a PED file template for cases.
+# 2. Constructs .ped files by combining fixed pedigree structure with case-specific allele vectors.
+# 3. Automates likelihood calculation for each .ped file using Merlin via shell script:
+#    - Each file is passed through Merlin using linkage-aware models.
+#    - Log-likelihoods are summed and saved to output.
+
+
+```{bash}
+$ nano merlin_cases.sh
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Set working directories
+cd "/Users/huncho/Desktop/Forensic_Kinship/Cases/Input_Files"
+
+# Define marker and frequency files
+MARKER_DAT="Updated_Kintelligence.dat"
+MARKER_MAP="Updated_Kintelligence_Map_noX.map"
+FREQ_FILE="Kintelligence_British_10000.freq"
+
+
+# Make sure .ped files are in $PWD (or cd into that directory)
+for ped in *_*.ped; do
+  basename="${ped%.ped}"              # e.g. A_B_FC
+  logfile="${basename}.merlin.log"    # captures full Merlin output
+  sumfile="${basename}.lnlikelihood.txt"
+
+  echo "→ Processing $ped …"
+
+  # Run Merlin, capture all output
+  merlin \
+    -p "$ped" \
+    -d "$MARKER_DAT" \
+    -m "$MARKER_MAP" \
+    -f "$FREQ_FILE" \
+    --likelihood \
+    --markerNames \
+    > "$logfile" 2>&1
+
+  # Extract and sum all ln-likelihood values directly from lines containing "LnLikelihood for"
+  total_ln=$(awk '/LnLikelihood for/ { sum += $2 } END { printf "%.3f\n", sum }' "$logfile")
+
+  # Write just the summed value
+  echo "$total_ln" > "$sumfile"
+  echo "  ➜ summed ln-likelihood = $total_ln ➜ wrote $sumfile"
+done
+
+echo "All done!"
+```
+
+```{bash}
+# Make executable and run the script
+chmod +x merlin_cases.sh
+
+./merlin_cases.sh
+```
+
+# Process lnlikelihood outputs from Merlin simulations, calculate linear and log10 likelihood ratios (LRs) comparing FC and HS scenarios against the unrelated baseline (UN).
+# The results are saved as a summary CSV for downstream kinship analysis.
+
+```{r}
+# Define Input Directory Containing lnlikelihood txt files
+input_dir <- "/Users/huncho/Desktop/Forensic_Kinship/Cases/Outputs"
+
+# Read and Parse all lnlikelihood .txts
+# Each file is assumed to have one numeric value representing the summed ln-likelihood.
+# The filename structure is expected to follow: IND1_IND2_REL.lnlikelihood.txt
+files <- list.files(input_dir,
+                    pattern = "\\.lnlikelihood\\.txt$",
+                    full.names = TRUE)
+
+df <- lapply(files, function(fpath) {
+  fname_no_ext <- tools::file_path_sans_ext(basename(fpath))  # e.g., "A_B_FC"
+  parts <- strsplit(fname_no_ext, "_")[[1]]                   # split into c("A", "B", "FC")
+
+  rel     <- tail(parts, 1)                                   # get relationship type (FC/HS/UN)
+  case_id <- paste(parts[-length(parts)], collapse = "-")     # get case identifier (e.g., A-B)
+
+  lnl <- as.numeric(readLines(fpath))                         # read the lnL value (single-line file)
+
+  tibble(case_id = case_id, relation = rel, lnl = lnl)
+}) %>% bind_rows()
+
+# Convert to Wide format 
+wide <- df %>%
+  pivot_wider(names_from  = relation,
+              values_from = lnL,
+              names_prefix = "lnL_")  %>%
+  rename(lnL_FC = lnL_FC,
+         lnL_HS = lnL_HS,
+         lnL_UN = lnL_UN)
+
+# Compute LRs and log10LRs for HS and FC against UN
+wide <- wide %>%
+  mutate(
+    LR_FC = exp(lnL_FC - lnL_UN),
+    LR_HS = exp(lnL_HS - lnL_UN),
+    log10LR_FC = (lnL_FC - lnL_UN) / log(10),
+    log10LR_HS = (lnL_HS - lnL_UN) / log(10)
+  )
+
+# Write out to .csv summary file
+out_csv <- file.path(input_dir, "Case_LR_summary.csv")
+write_csv(wide, out_csv)
+
+message("Done! Summary written to: ", out_csv)
+```
+
+# Reads a log-likelihood summary spreadsheet, computes FC vs HS likelihood ratios (LR and log10LR), and saves a new csv with these additional calculations.
+
+```{r}
+# Read Excel Input
+infile <- "/Users/huncho/Desktop/Forensic_Kinship/Cases/Outputs/Case_LR_summary.xlsx"
+df <- read_excel(infile)
+
+# Compute FC/HS LRs
+df2 <- df %>%
+  mutate(
+    LR_FCvsHS       = exp(lnL_FC - lnL_HS),
+    log10LR_FCvsHS  = (lnL_FC - lnL_HS) / log(10)
+  )
+
+# Create Clean output
+basename_no_ext <- file_path_sans_ext(infile)  # removes .xlsx
+out_csv <- file.path(getwd(), paste(basename_no_ext, "_classified.csv", sep = ""))
+
+# Save Results
+write_csv(df2, out_csv)
+
+message("Classification file saved as: ", out_csv)
+```
+

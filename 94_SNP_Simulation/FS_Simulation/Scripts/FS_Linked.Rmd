@@ -1,0 +1,52 @@
+---
+title: "FS_Linked"
+output: html_document
+date: "2025-06-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages 
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+# Verify the structure of the original .ped file
+
+```{r}
+# Define the file path
+Original_FS_ped_path <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FS_Simulation/Input_Files/FSvUN_94.ped"
+
+# Load the Linked file
+Original_FS_ped <- read_delim(Original_FS_ped_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the file as a spreadsheet-style data viewer 
+View(Original_FS_ped)
+```
+
+# Code to run the Merlin Simulation for FS_Linked which requires: 
+# 1) Defining the path to the 4 input files: .freq, .ped, .map, .dat
+# 2) Setting the random seed
+# 3) Setting the number of re-runs/iterations
+# 4) Saving the intermediate files and lnlikelihoods produced
+
+```{bash}
+merlin -p ../Original_Files/FSvUN_94.ped -d ../Original_Files/Markers_ForenSeq_SNP.dat -m ../Original_Files/Linked_ForenSeqSNP.map -f ../Original_Files/WBFreq_94_SNPs_FamLink.freq -r 3898 --simulate --reruns 50000 --likelihood --information --markerNames --quiet --save --prefix FS_Linked/FS_Linked > likelihoods_FS_Linked_summary.txt
+```
+
+# Verify the structure of the 1st .ped File produced from the simulation
+
+```{r}
+# Define file paths
+Simulated_FS_Ped1_path <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FS_Simulation/FS_Linked/merlin-00003898-00001-replicate.ped"
+
+# Load the Linked file
+Simulated_FS_Ped1 <- read_delim(Simulated_FS_Ped1_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Simulated_FS_Ped1)
+```

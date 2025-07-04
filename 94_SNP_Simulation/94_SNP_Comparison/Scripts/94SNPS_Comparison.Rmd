@@ -1,0 +1,90 @@
+---
+title: "94SNPS_Comparison"
+output: html_document
+date: "2025-06-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages/Libraries
+
+```{r}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+# Compare likelihood ratios (LRs) between MERLIN and FamLink outputs across 
+# different relationships (Full Siblings, Half Siblings, First Cousins)
+# using ratio-based density plots for true related and unrelated pairs
+
+```{r}
+# Define function to process each sheet (FC, FS, HS)
+process_sheet_dual <- function(sheet_name, rel_label) {
+  # Read the corresponding sheet from Excel
+  df <- read_excel("/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/94_SNP_Comparison/Outputs/Comparison/LRs_MERLIN_vs_FamLink_94SNPs.xlsx", sheet = sheet_name)
+  colnames(df) <- make.names(colnames(df))  # Convert column names to valid R variable names (e.g., replace spaces or symbols)
+
+  # Calculate LR ratios for true related pairs (MERLIN and FamLink)
+  related <- data.frame(
+    Ratio = c(df[[1]] / df[[2]], df[[4]] / df[[5]]),
+    Source = rep(c("MerlinOutput", "FamLink"), each = nrow(df)),
+    Relationship = rel_label,
+    PairType = "True Related"
+  )
+
+  # # Calculate LR ratios for true unrelated pairs (MERLIN and FamLink)
+  unrelated <- data.frame(
+    Ratio = c(df[[8]] / df[[9]], df[[11]] / df[[12]]),
+    Source = rep(c("MerlinOutput", "FamLink"), each = nrow(df)),
+    Relationship = rel_label,
+    PairType = "True Unrelated"
+  )
+
+  # Combine and return both related and unrelated data
+  bind_rows(related, unrelated)
+}
+
+# Process all relationship sheets
+df_fc <- process_sheet_dual("FC", "Full Siblings")
+df_fs <- process_sheet_dual("FS", "Half Siblings")
+df_hs <- process_sheet_dual("HS", "First Cousins")
+
+# Combine into one dataframe for plotting
+all_data <- bind_rows(df_fc, df_fs, df_hs)
+
+# Define faceted density plotting function
+plot_faceted <- function(data, rel) {
+  p <- ggplot(data %>% filter(Relationship == rel), 
+              aes(x = Ratio, fill = Source, color = Source)) +
+    geom_density(alpha = 0.4) +
+    geom_vline(xintercept = 1, linetype = "dashed", color = "red", linewidth = 1) +
+    scale_x_log10() +
+    facet_wrap(~ PairType, scales = "free_y") +
+    labs(title = paste("Overlay Density Plot:", rel, "(MerlinOutputs vs. FamLink)"),
+         x = expression(paste("LR Ratio (", LR[account], "/", LR[ignore], ")")),
+         y = "Density") +
+    theme_minimal()
+  return(p)
+}
+
+# Generate plots by relationship
+plot_fc <- plot_faceted(all_data, "Full Siblings")
+plot_fs <- plot_faceted(all_data, "Half Siblings")
+plot_hs <- plot_faceted(all_data, "First Cousins")
+
+# Save each plot as PDF
+ggsave("Full_Siblings_LR_Ratio_Overlay.pdf", plot_fc, width = 10, height = 6, dpi = 300)
+ggsave("Half_Siblings_LR_Ratio_Overlay.pdf", plot_fs, width = 10, height = 6, dpi = 300)
+ggsave("First_Cousins_LR_Ratio_Overlay.pdf", plot_hs, width = 10, height = 6, dpi = 300)
+
+# display plots in RStudio console
+print(plot_fc)
+print(plot_fs)
+print(plot_hs)
+```
+
+

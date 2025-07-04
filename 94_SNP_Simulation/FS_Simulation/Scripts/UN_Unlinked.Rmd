@@ -1,0 +1,92 @@
+---
+title: "UN_Unlinked"
+output: html_document
+date: "2025-06-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+# Run MERLIN to calculate lnLikelihoods assuming unlinked markers
+# This script uses the unlinked map file to ignore genetic linkage when computing likelihoods
+# Output lnLikelihoods are generated for each replicate in the UN_Linked .ped dataset
+
+```{bash}
+$ nano UN_Unlinked.sh
+
+#!/bin/bash
+
+# Set working directories
+BASE_DIR="/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FS_Simulation"
+PED_DIR="$BASE_DIR/UN_Linked"
+OUTPUT_DIR="$BASE_DIR/UN_Unlinked"
+INPUT_FILES="$BASE_DIR/Input_Files"
+
+# Define marker and frequency files
+# Define random seed
+MARKER_DAT="$INPUT_FILES/Markers_ForenSeq_SNP.dat"
+MARKER_MAP="$INPUT_FILES/Linked_ForenSeqSNP.map"
+FREQ_FILE="$INPUT_FILES/WBFreq_94_SNPs_FamLink.freq"
+SEED=3898
+
+# Prepare summary file header
+OUTFILE="$OUTPUT_DIR/UN_Unlinked_lnlikelihoods.txt"
+echo -e "replicate\tlnlikelihood" > "$OUTFILE"
+
+# Create folder for storing individual lnLikelihood output files
+LNLIKELIHOOD_DIR="$OUTPUT_DIR/UN_Unlinked_lnlikelihoods"
+mkdir -p "$LNLIKELIHOOD_DIR"
+
+# Loop through all 50,000 replicates (00001–50000)
+for i in $(seq -f "%05g" 1 50000); do
+  PED_FILE="$PED_DIR/UN_ped${i}-fixed.ped"
+  LNLIKELIHOOD_FILE="$LNLIKELIHOOD_DIR/UN_ped${i}.lnlikelihood"
+
+# Check if .ped file exists before running MERLIN
+
+  if [[ -f "$PED_FILE" ]]; then
+    echo "Running Merlin for replicate $i …"
+
+    # Run Merlin to calculate lnlikelihood
+    merlin \
+      -p "$PED_FILE" \
+      -d "$MARKER_DAT" \
+      -m "$MARKER_MAP" \
+      -f "$FREQ_FILE" \
+      -r "$SEED" \
+      --likelihood \
+      --markerNames \
+    > "$LNLIKELIHOOD_FILE" 2>&1
+
+    # Extract the last line containing "likelihood =" from MERLIN output
+    LINE=$(grep -i "likelihood.*=" "$LNLIKELIHOOD_FILE" | tail -n1)
+
+    # Extract the numeric value after the "=" sign
+    LN=$(echo "$LINE" | cut -d '=' -f 2 | xargs)
+
+    # Append replicate ID and lnLikelihood value to the summary file
+    echo -e "${i}\t${LN}" >> "$OUTFILE"
+
+    # If .ped file does not exist, log a warning and skip
+  else
+    echo "WARNING: $PED_FILE not found, skipping."
+  fi
+done
+
+# Final message upon completion
+echo "All done!  See summary in $OUTFILE and full outputs in $LNLIKELIHOOD_DIR/"
+```
+
+```{bash}
+# Make the script executable and run it
+chmod +x UN_Unlinked.sh
+./UN_Unlinked.sh
+```

@@ -1,0 +1,218 @@
+---
+title: "UN_Linked_Unrelated"
+output: html_document
+date: "2025-06-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages 
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+# The 50,000 .ped files from the UN_Linked simulation are manipulated to simulate unrelated individuals.
+# This is done by:
+# 1) Breaking familial relationships by setting columns 3 (Mother ID) and 4 (Father ID) to 0.
+# 2) Removing extra rows/columns added during simulation.
+# 3) Standardising each .ped file to contain only two unrelated individuals:
+#    - First 5 columns fixed
+#    - Remaining columns: genotypes from each simulated .ped file
+
+
+```{r}
+# Set the directories, input directory is where the UN_Linked simulated .peds are stored and the output directory is where the manipulated .peds will be stored
+in_dir  <- "/Users/huncho/Desktop/Forensic_Kinship_Project/FC_Simulation/UN_Linked"
+out_dir <- "/Users/huncho/Desktop/Forensic_Kinship_Project/FC_Simulation/UN_Linked_Unrelated"
+
+# Create the output directory if it doesn’t exist
+if (!dir.exists(out_dir)) dir.create(out_dir)
+
+# Grab all UN_Linked .ped files matching the pattern:
+# "merlin-00003898-xxxxx-replicate.ped" (where xxxxx ranges from 00001 to 50000)
+all_fns <- list.files(
+  path       = in_dir,
+  pattern    = "^merlin-00003898-\\d{5}-replicate\\.ped$",
+  full.names = TRUE
+)
+
+# 2) Define the transformation as a function
+process_ped <- function(in_ped_path, out_ped_path) {
+  df <- read_delim(in_ped_path, delim = "\t", col_names = FALSE)
+  
+  df_mod <- df %>%
+    
+    # Set X3 and X4 (mother and father IDs) to 0 to break any pedigree structure
+    mutate(
+      X3 = 0,
+      X4 = 0
+    ) %>%
+    
+    # Shift genotypes from rows 7 and 8 to become the first two rows (representing two unrelated individuals)
+    { tmp <- . 
+      cols_to_shift <- 6:ncol(tmp)
+      tmp[1, cols_to_shift] <- tmp[7, cols_to_shift]
+      tmp[2, cols_to_shift] <- tmp[8, cols_to_shift]
+      tmp
+    } %>%
+    
+    # Drop all original rows except the newly reassigned unrelated pair (keep only rows 1 and 2)
+    slice(-c(3,4,5,6,7,8)) %>%
+    
+  # Write the modified .ped file to the output directory
+  write_delim(
+    df_mod,
+    out_ped_path,
+    delim     = "\t",
+    col_names = FALSE
+  )
+}
+
+# Loop over all input .ped files and apply the transformation function
+for (in_file in all_fns) {
+  # construct the output filename by replacing ".ped" with "_UN.ped" (unrelated) 
+  # e.g., merlin-00003898-00001-replicate.ped --> merlin-00003898-00001-replicate_UN.ped 
+  base    <- basename(in_file) 
+  base_no_ext <- tools::file_path_sans_ext(base)
+  new_base <- paste(base_no_ext, "_UN.ped", sep = "")
+  out_file <- file.path(out_dir, new_base)
+  
+  process_ped(in_file, out_file)
+}
+```
+
+# Verify the structure of the 1st .ped file produced from the simulation and the manipulated .ped to verify correct manipulation
+# Will also pick a random .ped out of the 50,000 to do the same
+
+# Verify 1st simulated .ped File
+
+```{r}
+# Define file paths
+Simulated_UN_Ped1_path <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/UN_Linked/merlin-00003898-00001-replicate.ped"
+
+# Load the Linked file
+Simulated_UN_Ped1 <- read_delim(Simulated_UN_Ped1_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Simulated_UN_Ped1)
+```
+
+# Verify 1st manipulated .ped File
+
+```{r}
+# Define file paths
+Manipulated_UN_Ped1_path <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/UN_Linked_Unrelated/merlin-00003898-00001-replicate_UN.ped"
+
+# Load the Linked file
+Manipulated_UN_Ped1 <- read_delim(Manipulated_UN_Ped1_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Manipulated_UN_Ped1)
+```
+
+# Verify 27674 simulated .ped File
+
+```{r}
+# Define file paths
+Simulated_UN_Ped27674_path <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/UN_Linked/merlin-00003898-27674-replicate.ped"
+
+# Load the Linked file
+Simulated_UN_Ped27674 <- read_delim(Simulated_UN_Ped27674_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Simulated_UN_Ped27674)
+```
+
+# Verify 27674 manipulated .ped File
+
+```{r}
+# Define file paths
+Manipulated_UN_Ped27674_path <- "/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation/UN_Linked_Unrelated/merlin-00003898-27674-replicate_UN.ped"
+
+# Load the Linked file
+Manipulated_UN_Ped27674 <- read_delim(Manipulated_UN_Ped27674_path, delim = "\t", col_names = FALSE)
+
+# Display structure of the files
+View(Manipulated_UN_Ped27674)
+```
+
+# Run MERLIN to extract lnLikelihoods for unrelated cases (H2)
+# Note: We are not re-simulating — genotypes must remain consistent between UN_Linked and UN_Linked_Unrelated.
+# This script loops over all 50,000 manipulated .ped files and saves the lnLikelihoods to individual files.
+# All extracted lnLikelihood values are also compiled into a single summary file for downstream processing.
+
+```{bash}
+$ nano UN_Linked_Unrelated.sh
+
+#!/bin/bash
+
+# Set working directories
+BASE_DIR="/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FC_Simulation"
+PED_DIR="$BASE_DIR/UN_Linked_Unrelated"
+OUTPUT_DIR="$BASE_DIR/UN_Linked_Unrelated"
+INPUT_FILES="$BASE_DIR/Input_Files"
+
+# Define marker and frequency files
+# Define random seed
+MARKER_DAT="$INPUT_FILES/Markers_ForenSeq_SNP.dat"
+MARKER_MAP="$INPUT_FILES/Linked_ForenSeqSNP.map"
+FREQ_FILE="$INPUT_FILES/WBFreq_94_SNPs_FamLink.freq"
+SEED=3898
+
+# Prepare summary file header
+OUTFILE="$OUTPUT_DIR/UN_Linked_Unrelated_lnlikelihoods.txt"
+echo -e "replicate\tlnlikelihood" > "$OUTFILE"
+
+# Create folder for storing individual lnLikelihood output files
+LNLIKELIHOOD_DIR="$OUTPUT_DIR/UN_Linked_Unrelated_lnlikelihoods"
+mkdir -p "$LNLIKELIHOOD_DIR"
+
+# Loop through all 50,000 replicates (00001–50000)
+for i in $(seq -f "%05g" 1 50000); do
+  PED_FILE="$PED_DIR/UN_ped${i}-fixed_UN.ped"
+  LNLIKELIHOOD_FILE="$LNLIKELIHOOD_DIR/UN_ped${i}.lnlikelihood"
+
+# Check if .ped file exists before running MERLIN
+
+  if [[ -f "$PED_FILE" ]]; then
+    echo "Running Merlin for replicate $i …"
+
+    # Run Merlin to calculate lnlikelihood
+    merlin \
+      -p "$PED_FILE" \
+      -d "$MARKER_DAT" \
+      -m "$MARKER_MAP" \
+      -f "$FREQ_FILE" \
+      -r "$SEED" \
+      --likelihood \
+      --markerNames \
+    > "$LNLIKELIHOOD_FILE" 2>&1
+
+    # Extract the last line containing "likelihood =" from MERLIN output
+    LINE=$(grep -i "likelihood.*=" "$LNLIKELIHOOD_FILE" | tail -n1)
+
+    # Extract the numeric value after the "=" sign
+    LN=$(echo "$LINE" | cut -d '=' -f 2 | xargs)
+
+    # Append replicate ID and lnLikelihood value to the summary file
+    echo -e "${i}\t${LN}" >> "$OUTFILE"
+
+    # If .ped file does not exist, log a warning and skip
+  else
+    echo "WARNING: $PED_FILE not found, skipping."
+  fi
+done
+
+# Final message upon completion
+echo "All done!  See summary in $OUTFILE and full outputs in $LNLIKELIHOOD_DIR/"
+```
+
+```{bash}
+# Make the script executable and run it
+chmod +x UN_Linked_Unrelated.sh
+./UN_Linked_Unrelated.sh
+```

@@ -1,0 +1,46 @@
+MERLIN 1.1.2 - (c) 2000-2007 Goncalo Abecasis
+
+References for this version of Merlin:
+
+   Abecasis et al (2002) Nat Gen 30:97-101        [original citation]
+   Fingerlin et al (2004) AJHG 74:432-43          [case selection for association studies]
+   Abecasis and Wigginton (2005) AJHG 77:754-67   [ld modeling, parametric analyses]
+   Fingerlin et al (2006) Gen Epidemiol 30:384-96 [sex-specific maps]
+   Chen and Abecasis (2007) AJHG 81:913-26        [qtl association analysis, qtl simulation]
+
+
+The following parameters are in effect:
+                     Data File : /Users/huncho/Desktop/Forensic_Kinship_Project/HS_Simulation/Original_Files/Markers_ForenSeq_SNP.dat (-dname)
+                 Pedigree File : /Users/huncho/Desktop/Forensic_Kinship_Project/HS_Simulation/UN_Linked_Unrelated/UN_ped18615-fixed_UN.ped (-pname)
+            Missing Value Code :         -99.999 (-xname)
+                      Map File : /Users/huncho/Desktop/Forensic_Kinship_Project/HS_Simulation/Original_Files/Unlinked_ForenSeqSNP.map (-mname)
+            Allele Frequencies : /Users/huncho/Desktop/Forensic_Kinship_Project/HS_Simulation/Original_Files/WBFreq_94_SNPs_FamLink.freq (-f[a|e|f|m|file])
+                   Random Seed :            3898 (-r9999)
+
+Data Analysis Options
+         General : --error, --information, --likelihood [ON],
+                   --model [param.tbl]
+      IBD States : --ibd, --kinship, --matrices, --extended, --select
+     NPL Linkage : --npl, --pairs, --qtl, --deviates, --exp
+      VC Linkage : --vc, --useCovariates, --ascertainment, --unlinked [0.00]
+     Association : --infer, --assoc, --fastAssoc, --filter, --custom [cov.tbl]
+     Haplotyping : --best, --sample, --all, --founders, --horizontal
+   Recombination : --zero, --one, --two, --three, --singlepoint
+       Positions : --steps, --maxStep, --minStep, --grid, --start, --stop
+     LD Clusters : --clusters [], --distance, --rsq, --cfreq
+          Limits : --bits [24], --megabytes, --minutes
+     Performance : --trim, --noCoupleBits, --swap, --smallSwap
+          Output : --quiet, --markerNames [ON], --frequencies, --perFamily,
+                   --pdf, --tabulate, --prefix [merlin]
+      Simulation : --simulate, --reruns, --save, --trait []
+
+
+WARNING - 
+According to the current map, this chromosome is 2860 Morgans long.
+Check units in your map file.
+
+
+lnLikelihood for 1 families (0 skipped) = -179.944
+
+
+

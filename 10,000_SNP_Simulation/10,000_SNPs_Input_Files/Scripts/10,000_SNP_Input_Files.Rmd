@@ -1,0 +1,360 @@
+---
+title: "10,000_SNP_Input_Files"
+output: html_document
+date: "2025-06-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load packages/libraries
+
+```{r}
+library(httr)
+library(jsonlite)
+library(dplyr)
+library(tibble)
+library(readr)
+library(readxl)
+library(tidyr)
+library(writexl)
+library(openxlsx)
+```
+
+# Inspect the structure of the provided linked .map file for 10,000 SNPs
+
+```{r}
+# Set the path to the linked .map file
+SNPs_10000_linked_map_path <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Updated_Kintelligence_Map_noX.map"
+
+# Read in the .map file as a tab-delimited table without headers
+SNPs_10000_linked_map <- read_delim(SNPs_10000_linked_map_path, delim = "\t", col_names = FALSE)
+
+# Open the .map file in a viewer to check its structure
+View(SNPs_10000_linked_map)
+```
+
+# Convert a linked .map file into an unlinked version by assigning dummy genetic positions
+
+```{r}
+# Load the original .map file (3 columns, no headers)
+snp_map <- read_table2("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Updated_Kintelligence_Map_noX.map", col_names = FALSE)
+
+# Rename columns for clarity
+colnames(snp_map) <- c("CHROMOSOME", "MARKER", "POSITION")
+
+# Reassign dummy genetic positions to simulate unlinked markers
+# Position spacing of 400 is arbitrary—based on previous simulations that used intervals like 200/400/600
+unlinked_map <- snp_map %>%
+unlinked_map <- snp_map %>%
+  group_by(CHROMOSOME) %>%
+  mutate(POSITION = seq(from = 1, by = 4000, length.out = n())) %>%
+  ungroup() %>%
+  select(CHROMOSOME, MARKER, POSITION)
+
+# Write the modified map to a new unlinked map file
+write.table(unlinked_map, "Updated_Kintelligence_Map_noX_Unlinked.map", sep = "\t", quote = FALSE,
+            row.names = FALSE, col.names = FALSE)
+
+# View the resulting unlinked .map file
+View(unlinked_map)
+```
+
+# Create a .dat file from the .map input — used to specify marker types for MERLIN
+
+```{r}
+# Read .map file (3-column, no header, tab-delimited)
+map_df <- read_table2("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Updated_Kintelligence_Map_noX.map", col_names = FALSE)
+
+# Rename columns for clarity
+colnames(map_df) <- c("CHROMOSOME", "MARKER", "POSITION")
+
+# Construct .dat content: one row per SNP with type 'M'
+dat_df <- data.frame(TYPE = "M", MARKER = map_df$MARKER)
+
+# Export .dat file (space-separated, no headers or quotes)
+write.table(dat_df, "Updated_Kintelligence.dat", sep = " ", quote = FALSE,
+            row.names = FALSE, col.names = FALSE)
+
+# View the generated .dat file
+View(dat_df)
+```
+
+# Retrieve allele frequencies (REF and ALT) for all target SNP markers 
+# Prefer GBR (1000 Genomes, British) data; fallback to gnomADg:nfe if GBR unavailable
+
+```{r}
+# Load list of rsIDs
+rsids <- read_lines("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Output_Files/snp_list.txt") %>%
+  unique()
+
+# Initialise results table
+results <- data.frame(
+  rsID = character(),
+  allele = character(),
+  frequency = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Iterate over each rsID
+for (rsid in rsids) {
+  cat("\n Processing:", rsid, "\n")
+  
+  # Build API request
+  url <- paste0("https://rest.ensembl.org/variation/homo_sapiens/", rsid, "?content-type=application/json;pops=1")
+  res <- GET(url)
+
+  # Handle failed request
+  if (status_code(res) != 200) {
+    cat(" Request failed with status:", status_code(res), "\n")
+    next
+  }
+
+  # Convert JSON to R object
+  data <- fromJSON(rawToChar(res$content))
+
+  # Check for population data field
+  if ("populations" %in% names(data)) {
+    pop_data <- as_tibble(data$populations)
+
+    # First, try to extract GBR data
+    gbr_entries <- pop_data[pop_data$population == "1000GENOMES:phase_3:GBR", c("allele", "frequency")]
+    
+    if (nrow(gbr_entries) == 2) {
+      gbr_entries$rsID <- rsid
+      gbr_entries <- gbr_entries[, c("rsID", "allele", "frequency")]
+      results <- bind_rows(results, gbr_entries)
+    } else {
+      # If GBR has less than 2 alleles, try gnomADg:nfe
+      nfe_entries <- pop_data[pop_data$population == "gnomADg:nfe", c("allele", "frequency")]
+
+      if (nrow(nfe_entries) == 2) {
+        nfe_entries$rsID <- rsid
+        nfe_entries <- nfe_entries[, c("rsID", "allele", "frequency")]
+        results <- bind_rows(results, nfe_entries)
+        cat(" GBR data missing — used gnomADg:nfe instead\n")
+      } else {
+        cat(" No valid GBR or NFE population data found for:", rsid, "\n")
+      }
+    }
+  } else {
+    cat(" No populations field found in API response\n")
+  }
+}
+
+# Export final table of frequencies
+write.csv(results, "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Output_Files/GBR_allele_frequencies.csv", 
+          row.names = FALSE)
+
+cat("\n Finished processing all rsIDs")
+```
+
+# Reshape and finalise allele frequency table for downstream simulation
+# This section takes the raw allele frequency data (per allele, per SNP)
+# and reformats it into a one-row-per-marker structure with REF/ALT labels.
+# Only SNPs from the curated marker list are retained, ensuring order and consistency
+# with simulation input files. The result is exported as a cleaned frequency table.
+
+```{r}
+# Load Marker List for Filtering
+marker_list <- read.table(
+  "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Output_Files/snp_list.txt",
+  header = FALSE,
+  stringsAsFactors = FALSE
+)[[1]]
+marker_list <- as.character(marker_list)
+
+# Load Raw Frequency Table (exported from Ensembl API script)
+freq_raw <- read_excel(
+  "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Output_Files/GBR_allele_frequencies.xlsx"
+) %>%
+  rename(Marker = rsID, Allele = allele, Frequency = frequency) %>%
+  mutate(Marker = as.character(Marker))
+
+# Reshape to One Row Per SNP: Assign REF and ALT based on row order
+freq_wide <- freq_raw %>%
+  group_by(Marker) %>%
+  mutate(Type = c("REF", "ALT")) %>%  # Assumes REF is listed first in input
+  pivot_wider(
+    id_cols = Marker,
+    names_from = Type,
+    values_from = c(Allele, Frequency),
+    names_sep = "_"
+  ) %>%
+  rename(
+    REF = Allele_REF,
+    ALT = Allele_ALT,
+    REF_freq = Frequency_REF,
+    ALT_freq = Frequency_ALT
+  ) %>%
+  ungroup()
+
+# Filter to SNPs in marker list and sort accordingly
+freq_final <- freq_wide %>%
+  filter(Marker %in% marker_list) %>%
+  mutate(Marker = factor(Marker, levels = marker_list)) %>%
+  arrange(Marker)
+
+# Export Final Table
+write_xlsx(
+  freq_final,
+  "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Output_Files/GBR_cleaned_freq_table_with_freqs.xlsx"
+)
+
+```
+
+# Format validated frequency table into MERLIN-compatible .freq structure and export as Excel (easier to inspect in Excel before formatting in .freq)
+
+```{r}
+# Define input file (cleaned allele frequencies) and output paths
+freq_file <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Output_Files/GBR_cleaned_freq_table_with_freqs.xlsx"
+output_file <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Output_Files/SNPs_10000.freq.xlsx"
+output_sheet <- "GBR"
+
+# Read in curated allele frequency data and round to 3 decimal places for consistency
+freq_data <- read_excel(freq_file) %>%
+  mutate(
+    REF_freq = round(as.numeric(REF_freq), 3),
+    ALT_freq = round(as.numeric(ALT_freq), 3)
+  )
+
+# Check that REF and ALT frequencies sum to 1.0 — required for valid .freq format
+invalid <- freq_data %>%
+  filter((REF_freq + ALT_freq) != 1)
+
+if (nrow(invalid) > 0) {
+  stop("ERROR: Some markers do not sum to exactly 1:\n",
+       paste0(capture.output(print(invalid %>% select(Marker, REF_freq, ALT_freq))), collapse = "\n"))
+}
+
+# Format for .freq file: each marker gets 3 lines — M line, then REF and ALT allele rows
+formatted <- lapply(1:nrow(freq_data), function(i) {
+  marker <- freq_data$Marker[i]
+  ref <- freq_data$REF[i]
+  alt <- freq_data$ALT[i]
+  ref_freq <- freq_data$REF_freq[i]
+  alt_freq <- freq_data$ALT_freq[i]
+
+  data.frame(
+    V1 = c("M", "A", "A"),
+    V2 = c(marker, ref, alt),
+    V3 = c(NA, ref_freq, alt_freq),
+    stringsAsFactors = FALSE
+  )
+})
+
+# Combine all marker rows into final exportable dataframe
+final_df <- do.call(rbind, formatted)
+
+# Write to Excel with no headers
+wb <- createWorkbook()
+addWorksheet(wb, output_sheet)
+writeData(wb, output_sheet, final_df, colNames = FALSE)
+saveWorkbook(wb, output_file, overwrite = TRUE)
+
+cat("\n .freq sheet successfully written. All allele frequencies sum to exactly 1.\n")
+```
+
+# Read in exported .freq Excel and ensure frequency formatting matches expected structure before writing .freq file
+
+```{r}
+# Load the .freq file (expecting 3 columns, no header)
+GBR <- read_excel(
+  path = "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Output_Files/SNPs_10000.freq.xlsx",
+  sheet = 1,
+  col_names = FALSE
+)
+
+# Assign temporary column names for readability
+colnames(GBR) <- c("type", "V2", "V3")
+
+# Format numeric frequency values to 3 decimal places
+GBR$V3 <- ifelse(
+  is.na(GBR$V3),
+  "",
+  sprintf("%.3f", as.numeric(GBR$V3))
+)
+
+# Write out tab-delimited text file without headers or quotes
+write.table(
+  GBR,
+  file = "Kintelligence_British_10000.freq",
+  sep = "\t",
+  quote = FALSE,
+  col.names = FALSE,
+  row.names = FALSE
+)
+
+# Visually inspect final structure
+View(GBR)
+
+```
+
+# Generate PED files for simulated relatives by embedding consistent allele calls across multiple relationship types (FS, HS, FC)
+
+```{r}
+# Load Allele Data (Reference and Alternative Alleles for Each Marker)
+allele_data <- read.xlsx("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Output_Files/GBR_cleaned_freq_table_with_freqs.xlsx", colNames = TRUE)
+alleles <- allele_data[, c("REF", "ALT")]
+
+# Load Pedigree Templates for FC, FS, and HS Scenarios
+xlsx_path <- "/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/Output_Files/ped_files_template.xlsx"
+sheets <- c("FC", "FS", "HS")
+output_names <- c("FC_10000.ped", "FS_10000.ped", "HS_10000.ped")
+
+# Define Rows to Fill with Genotypes in Each Pedigree Sheet
+allele_rows <- list(FC = c(7, 8), FS = c(3, 4), HS = c(4, 5)) # Row indices for genotype columns
+
+# === Function to Generate Genotype Columns for PED Format ===
+generate_genotype_data <- function(n_rows, allele_row_indices, alleles) {
+  n_markers <- nrow(alleles)
+  genotype_matrix <- matrix("0", nrow = n_rows, ncol = 2 * n_markers)
+  
+  for (i in seq_along(allele_row_indices)) {
+    row_idx <- allele_row_indices[i]
+    # Repeat each allele per marker twice (two columns per SNP in PED format)
+    allele_vector <- unlist(apply(alleles, 1, function(a) rep(a[i], 2)))
+    genotype_matrix[row_idx, ] <- allele_vector
+  }
+  
+  return(genotype_matrix)
+}
+
+# Loop Through Each Pedigree Sheet and Generate Full PED File
+for (i in seq_along(sheets)) {
+  sheet <- sheets[i]
+  output_file <- output_names[i]
+  allele_rows_i <- allele_rows[[sheet]]
+  
+  # Load template sheet for selected relationship
+  df <- read_excel(xlsx_path, sheet = sheet, col_names = FALSE)
+  
+  # Extract fixed part of PED structure
+  fixed_cols <- df[, 1:5]
+  n_rows <- nrow(df)
+  
+  # Generate marker genotype data columns
+  genotype_data <- generate_genotype_data(n_rows, allele_rows_i, alleles)
+  
+  # Merge fixed columns with genotype data and export as .ped
+  full_ped <- cbind(fixed_cols, genotype_data)
+  write.table(full_ped, file = output_file, quote = FALSE, sep = "\t", row.names = FALSE, col.names = FALSE)
+}
+
+cat("All PED-format files generated.\n")
+```
+
+# Display each ped to verify correct file formation
+
+```{r}
+FC_10000 <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/FC_10000.ped", header = FALSE, sep = "\t", stringsAsFactors = FALSE)
+FS_10000 <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/FS_10000.ped", header = FALSE, sep = "\t", stringsAsFactors = FALSE)
+HS_10000 <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/10,000_SNPs_Input_Files/HS_10000.ped", header = FALSE, sep = "\t", stringsAsFactors = FALSE)
+
+View(FC_10000)
+View(FS_10000)
+View(HS_10000)
+```
+
+

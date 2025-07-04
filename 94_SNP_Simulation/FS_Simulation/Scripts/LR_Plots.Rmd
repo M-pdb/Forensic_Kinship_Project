@@ -1,0 +1,99 @@
+---
+title: "LR_Plots"
+output: html_document
+date: "2025-06-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+
+```{r}
+library(ggplot2)   
+library(dplyr)     
+library(tidyr)     
+library(scales)    
+```
+
+# Visualise and compare likelihood ratios (LRs) for FS and UN scenarios using density plots on a log10 scale
+
+```{r}
+# Load LR results from CSV files for FS and UN data
+FS <- read.csv("/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FS_Simulation/Outputs/FS_all_LR_results.csv")
+un <- read.csv("/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/FS_Simulation/Outputs/UN_all_LR_results.csv")
+
+# Convert LR results from wide to long format to prepare for ggplot
+#    - Combine linked and unlinked columns into a single column ("log10LR")
+#    - Label each scenario clearly (e.g. "Linked", "Unlinked", etc.)
+#    - Compute the original LR from log10LR for plotting on a log scale
+
+FS_tidy <- FS %>% 
+  select(log10LR_linked, log10LR_unlinked) %>% 
+  pivot_longer(
+    everything(),
+    names_to  = "Scenario",
+    values_to = "log10LR"
+  ) %>% 
+  mutate(
+    LR    = 10^log10LR,
+    Group = recode(
+      Scenario,
+      log10LR_linked   = "Linked",
+      log10LR_unlinked = "Unlinked"
+    )
+  )
+
+un_tidy <- un %>% 
+  select(log10LR_linked, log10LR_unlinked) %>% 
+  pivot_longer(
+    everything(),
+    names_to  = "Scenario",
+    values_to = "log10LR"
+  ) %>% 
+  mutate(
+    LR    = 10^log10LR,
+    Group = recode(
+      Scenario,
+      log10LR_linked   = "TrueUN_Linked",
+      log10LR_unlinked = "TrueUN_Unlinked"
+    )
+  )
+
+plot_data <- bind_rows(FS_tidy, un_tidy)
+
+# Build a density plot of LRs (on log scale), coloured by scenario
+#     - Add vertical reference line at LR = 1
+#     - Use log10 breaks and labels on the x-axis
+p <- ggplot(plot_data, aes(x = LR, colour = Group, fill = Group)) +
+  geom_density(alpha = 0.5, size = 0.8) +
+  scale_x_log10(
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x))
+  ) +
+  geom_vline(xintercept = 1e0, linetype = "dashed", colour = "black") +
+  labs(
+    title = "Distribution of LRs for First Cousins vs Unrelated with 94 SNPs",
+    x     = "LRs (log scale)",
+    y     = "Density"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.title    = element_blank(),
+    legend.position = "right"
+  )
+
+# Display plot in the RStudio viewer pane
+print(p)
+
+# 3c) Save the plot as a PDF file
+ggsave(
+  filename = "FS_vs_UN_94SNPs.pdf",
+  plot     = p,
+  device   = "pdf",
+  width    = 8,   # inches
+  height   = 6    # inches
+)
+
+```

@@ -1,0 +1,214 @@
+---
+title: "LR"
+output: html_document
+date: "2025-05-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+
+```{r}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+```
+
+# Load ln-likelihood summary files for each simulation scenario
+
+```{r}
+# Read files
+
+FS_linked <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/FS_Linked/FS_Linked_lnlikelihoods.txt", header = TRUE)
+FS_linked_unrelated <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/FS_Linked_Unrelated/FS_Linked_Unrelated_lnlikelihoods.txt", header = TRUE)
+
+un_linked <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/UN_Linked/UN_Linked_lnlikelihoods.txt", header = TRUE)
+un_linked_unrelated <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/UN_Linked_Unrelated/UN_Linked_Unrelated_lnlikelihoods.txt", header = TRUE)
+
+FS_unlinked <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/FS_Unlinked/FS_Unlinked_lnlikelihoods.txt", header = TRUE)
+FS_unlinked_unrelated <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/FS_Unlinked_Unrelated/FS_Unlinked_Unrelated_lnlikelihoods.txt", header = TRUE)
+
+un_unlinked <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/UN_Unlinked/UN_Unlinked_lnlikelihoods.txt", header = TRUE)
+un_unlinked_unrelated <- read.table("/Users/huncho/Desktop/Forensic_Kinship/10,000_SNP_Simulation/FS_Simulation/UN_Unlinked_Unrelated/UN_Unlinked_Unrelated_lnlikelihoods.txt", header = TRUE)
+```
+
+# Join ln-likelihood tables by replicate
+# Each table contains ln-likelihoods for a simulation scenario,
+# Merge them into one data frame using the shared 'replicate' column,
+# renaming the total_lnlikelihood column to reflect each scenario,
+
+```{r}
+all_lnL <- FS_linked %>%
+  rename(FS_linked = total_lnlikelihood) %>%
+  inner_join(FS_linked_unrelated %>% rename(FS_linked_unr = total_lnlikelihood), by = "replicate") %>%
+  inner_join(un_linked %>% rename(un_linked = total_lnlikelihood), by = "replicate") %>%
+  inner_join(un_linked_unrelated %>% rename(un_linked_unr = total_lnlikelihood), by = "replicate") %>%
+  inner_join(FS_unlinked %>% rename(FS_unlinked = total_lnlikelihood), by = "replicate") %>%
+  inner_join(FS_unlinked_unrelated %>% rename(FS_unlinked_unr = total_lnlikelihood), by = "replicate") %>%
+  inner_join(un_unlinked %>% rename(un_unlinked = total_lnlikelihood), by = "replicate") %>%
+  inner_join(un_unlinked_unrelated %>% rename(un_unlinked_unr = total_lnlikelihood), by = "replicate")
+```
+
+
+# Likelihood Ratio (LR) Calculations
+# For each replicate, compute:
+# - logLR: difference in ln-likelihoods (log-likelihood ratio)
+# - LR: exponentiated value (LR = exp(logLR))
+# - log10LR: base-10 transformation for reporting
+
+```{r}
+all_lnL <- all_lnL %>%
+  mutate(
+    # Compute log-likelihood ratios (H1 - H2)
+    logLR_FS_linked = FS_linked - FS_linked_unr,
+    logLR_UN_linked = un_linked - un_linked_unr,
+    logLR_FS_unlinked = FS_unlinked - FS_unlinked_unr,
+    logLR_UN_unlinked = un_unlinked - un_unlinked_unr,
+    
+    # Convert to likelihood ratios (natural scale)
+    LR_FS_linked = exp(logLR_FS_linked),
+    LR_UN_linked = exp(logLR_UN_linked),
+    LR_FS_unlinked = exp(logLR_FS_unlinked),
+    LR_UN_unlinked = exp(logLR_UN_unlinked),
+    
+    # Convert to base-10 scale
+    log10LR_FS_linked = logLR_FS_linked / log(10),
+    log10LR_UN_linked = logLR_UN_linked / log(10),
+    log10LR_FS_unlinked = logLR_FS_unlinked / log(10),
+    log10LR_UN_unlinked = logLR_UN_unlinked / log(10)
+  )
+```
+
+# Export full LR and logLR dataset
+
+```{r}
+write.table(all_lnL, "FSvUN_LR_full_output.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+```
+
+# Generate summary statistics (min, median, max) for logLR values
+# Applies to each of the four comparison conditions
+
+```{r}
+summary_stats <- data.frame(
+  condition = c("FS_linked", "UN_linked", "FS_unlinked", "UN_unlinked"),
+  min = c(
+    min(all_lnL$logLR_FS_linked),
+    min(all_lnL$logLR_UN_linked),
+    min(all_lnL$logLR_FS_unlinked),
+    min(all_lnL$logLR_UN_unlinked)
+  ),
+  median = c(
+    median(all_lnL$logLR_FS_linked),
+    median(all_lnL$logLR_UN_linked),
+    median(all_lnL$logLR_FS_unlinked),
+    median(all_lnL$logLR_UN_unlinked)
+  ),
+  max = c(
+    max(all_lnL$logLR_FS_linked),
+    max(all_lnL$logLR_UN_linked),
+    max(all_lnL$logLR_FS_unlinked),
+    max(all_lnL$logLR_UN_unlinked)
+  )
+)
+
+# Export summary statistics to file
+write.table(summary_stats, "FSvUN_logLR_summary_stats.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+```
+
+# PLOTTING: Density Plot of log10LRs for FS vs UN (9991 SNPs)
+
+```{r}
+# Prepare plotting data: extract log10LRs and reshape into long format
+plot_data <- all_lnL %>%
+  transmute(
+    FS_linked    = log10LR_FS_linked,
+    FS_unlinked  = log10LR_FS_unlinked,
+    UN_linked    = log10LR_UN_linked,
+    UN_unlinked  = log10LR_UN_unlinked
+  ) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "Group",
+    values_to = "log10LR"
+  )
+
+# Create density plot for all log10LRs
+p <- ggplot(plot_data, aes(x = log10LR, colour = Group, fill = Group)) +
+  geom_density(alpha = 0.5, size = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "black") +
+  labs(
+    title = "Distribution of log10LRs for FS vs UN (9991 SNPs)",
+    x = "log10LR",
+    y = "Density"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "right"
+  )
+
+# Display plot
+print(p)
+
+# Save as PDF
+ggsave(
+  filename = "FS_vs_UN_9991SNPs_log10LR.pdf",
+  plot = p,
+  device = "pdf",
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+```
+
+# CAPPED VERSION: Density Plot of log10LRs with Y-Axis Restricted
+
+```{r}
+# Prepare plotting data: extract log10LRs and reshape into long format
+plot_data_FS <- all_lnL %>%
+  transmute(
+    FS_linked    = log10LR_FS_linked,
+    FS_unlinked  = log10LR_FS_unlinked,
+    UN_linked    = log10LR_UN_linked,
+    UN_unlinked  = log10LR_UN_unlinked
+  ) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "Group",
+    values_to = "log10LR"
+  ) %>%
+  
+
+# Create capped plot with y-axis limited
+p_FS <- ggplot(plot_data_FS, aes(x = log10LR, colour = Group, fill = Group)) +
+  geom_density(alpha = 0.5, size = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "black") +
+  coord_cartesian(ylim = c(0, 0.05)) +
+  labs(
+    title = "Distribution of Capped log10LRs for FS vs UN (9991 SNPs)",
+    x = "log10LR",
+    y = "Density"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "right"
+  )
+
+# Display capped plot
+print(p_FS)
+
+# Save capped plot
+ggsave(
+  filename = "FS_vs_UN_9991SNPs_log10LR_ycapped.pdf",
+  plot = p_FS,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+```
+

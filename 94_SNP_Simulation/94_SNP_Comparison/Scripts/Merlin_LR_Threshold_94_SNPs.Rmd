@@ -1,0 +1,66 @@
+---
+title: "Merlin_LR_Threshold_94_SNPs"
+output: html_document
+date: "2025-06-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Required Libraries/Packages
+
+```{r}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(writexl)
+```
+
+# Assess LR classification performance by calculating true positive, false positive,
+# and false negative rates at various LR thresholds, and export results to Excel
+
+```{r}
+# Load the data
+df <- read_excel("/Users/huncho/Desktop/Forensic_Kinship/94_SNP_Simulation/94_SNP_Comparison/Outputs/Merlin_Results/Merlin_LRs_94SNPs.xlsx")
+
+# Define LR thresholds for evaluation
+pos_thresholds <- c(20, 100, 1000, 10000)
+neg_thresholds <- c(0.05, 0.01, 0.001, 0.0001)
+
+# Identify columns for related and unrelated cases
+related_cols   <- c("FC_Linked", "FC_Unlinked", "FS_Linked", "FS_Unlinked", "HS_Linked", "HS_Unlinked")
+unrelated_cols <- c("FC_FC_UN_Linked", "FC_UN_Unlinked", "FS_UN_Linked", "FS_UN_Unlinked", "HS_UN_Linked", "HS_UN_Unlinked")
+
+# True Positives (i.e. % of related samples above LR thresholds)
+tp_results <- sapply(df[related_cols], function(col) {
+  sapply(pos_thresholds, function(t) mean(col > t, na.rm = TRUE) * 100)
+})
+tp_results <- as.data.frame(tp_results)
+colnames(tp_results) <- paste("LR >", pos_thresholds, sep = "")
+
+# False Positives (i.e. % of unrelated samples above LR thresholds)
+fp_results <- sapply(df[unrelated_cols], function(col) {
+  sapply(pos_thresholds, function(t) mean(col > t, na.rm = TRUE) * 100)
+})
+fp_results <- as.data.frame(fp_results)
+colnames(fp_results) <- paste("LR >", pos_thresholds, sep = "")
+
+# False Negatives (i.e. % of related samples below LR thresholds)
+fn_results <- sapply(df[related_cols], function(col) {
+  sapply(neg_thresholds, function(t) mean(col < t, na.rm = TRUE) * 100)
+})
+fn_results <- as.data.frame(fn_results)
+colnames(fn_results) <- paste("LR <", neg_thresholds, sep = "")
+
+# Save all results to Excel
+write_xlsx(
+  list(
+    `True_Positives_LR_GT_Thresholds`  = tp_results,
+    `False_Positives_LR_GT_Thresholds` = fp_results,
+    `False_Negatives_LR_LT_Thresholds` = fn_results
+  ),
+  path = "LR_threshold_analysis_results.xlsx"
+)
+```
+

@@ -1,0 +1,114 @@
+---
+title: "FC_Unlinked"
+output: html_document
+date: "2025-06-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+# Run MERLIN to calculate lnLikelihoods assuming unlinked markers
+# This script uses the unlinked map file to ignore genetic linkage when computing likelihoods
+# Output lnLikelihoods are generated for each replicate in the FC_Linked .ped dataset
+
+```{bash}
+#HPC 
+
+$ nano FC_Unlinked.sh
+
+#!/bin/bash
+#SBATCH --job-name=merlin_FC_Unlinked
+#SBATCH --output=merlin_FC_Unlinked.out
+#SBATCH --error=merlin_FC_Unlinked.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=48:00:00
+
+# Load conda environment
+eval "$(conda shell.bash hook)"
+conda activate merlin_env
+
+# Set working directories
+BASE_DIR="/scratch/users/k21040223/FC_Simulation"
+PED_DIR="$BASE_DIR/FC_Linked"
+OUTPUT_DIR="$BASE_DIR/FC_Unlinked"
+ORIGINAL_FILES="$BASE_DIR/Original_Files"
+
+# Define marker and frequency files
+# Define random seed
+MARKER_DAT="$ORIGINAL_FILES/Updated_Kintelligence.dat"
+MARKER_MAP="$ORIGINAL_FILES/Updated_Kintelligence_Map_noX.map"
+FREQ_FILE="$ORIGINAL_FILES/Kintelligence_British_10000.freq"
+SEED=3898
+
+# Prepare summary file header
+OUTFILE="$OUTPUT_DIR/FC_Unlinked_lnlikelihoods.txt"
+echo -e "replicate\ttotal_lnlikelihood" > "$OUTFILE"
+
+# Create folder for storing individual lnLikelihood output files
+LNLIKELIHOOD_DIR="$OUTPUT_DIR/FC_Unlinked_lnlikelihoods"
+mkdir -p "$LNLIKELIHOOD_DIR"
+
+# Loop through all 50,000 replicates (00001–50000)
+for i in $(seq -f "%05g" 1 50000); do
+  PED_FILE="$PED_DIR/merlin-00003898-${i}-replicate.ped"
+  LNLIKELIHOOD_FILE="$LNLIKELIHOOD_DIR/merlin-00003898-${i}.lnlikelihood"
+
+# Check if .ped file exists before running MERLIN
+
+  if [[ -f "$PED_FILE" ]]; then
+    echo "Running Merlin for replicate $i …"
+
+    # Run Merlin to calculate lnlikelihood
+    merlin \
+      -p "$PED_FILE" \
+      -d "$MARKER_DAT" \
+      -m "$MARKER_MAP" \
+      -f "$FREQ_FILE" \
+      -r "$SEED" \
+      --likelihood \
+      --markerNames \
+      > "$LNLIKELIHOOD_FILE" 2>&1
+
+    # Extract all lnlikelihood values (one per chromosome), sum them
+      LN_SUM=$(grep -i "lnlikelihood for" "$LNLIKELIHOOD_FILE" \
+      | awk -F'= *' '
+          {
+            split($2, tokens, " ")
+            sum += tokens[1]
+          }
+          END {
+            printf "%.3f", sum
+          }
+        ')
+
+    # Append to the summary file
+    echo -e "${i}\t${LN_SUM}" >> "$OUTFILE"
+
+  # If .ped file does not exist, log a warning and skip
+  else
+    echo "WARNING: $PED_FILE not found, skipping."
+  fi
+done
+
+# Final message upon completion
+echo "All done! See summary in $OUTFILE and full outputs in $LNLIKELIHOOD_DIR/"
+
+$ sbatch FC_Unlinked.sh
+```
+
+# NOTE:
+# The FC_Linked_Unrelated and FC_Unlinked_Unrelated conditions both represent two unrelated individuals with no pedigree structure.
+
+# Since the underlying genotypes and likelihood model assumptions are identical,the ln-likelihood values computed by MERLIN are mathematically guaranteed to be the same.
+
+# To save computational time, ln-likelihoods were only calculated once (for FC_Linked_Unrelated) and reused for FC_Unlinked_Unrelated where applicable.
