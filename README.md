@@ -121,7 +121,7 @@ Please cite this work if used in academic contexts:
 
 **Author**: Maahi Hamza  
 **Supervisor**: Dr. Lucinda Davenport and Dr David Ballard  
-**Department**: Analytical, Environmental and Forensic Sciences  
+**Department**: Analytical, Environmental and Forensic Sciences (FoLSM)  
 **Email**: m.maahihamza1@gmail.com
 
 ---
