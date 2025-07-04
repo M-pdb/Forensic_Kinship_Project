@@ -55,7 +55,7 @@ It was developed in R and Bash and validated across three phases:
 ## Libraries/Packages 
 
 - Unix/Linux terminal or HPC
-- [`MERLIN`](http://csg.sph.umich.edu/abecasis/Merlin/) (v1.1.2 or compatible)
+- [`MERLIN`](http://csg.sph.umich.edu/abecasis/Merlin/) (v1.1.2)
 - `R` (≥ 4.4.1) with:
   - ‘dplyr’
   - ‘tidyr’
@@ -71,7 +71,7 @@ It was developed in R and Bash and validated across three phases:
 ## Pipeline Workflow
 
 ### 1. Preprocessing
-- Input `.ped`, `.map`, `.freq`, `.dat` files created in `Original_Input_Files/` or `10,000_SNPs_Input_Files/`
+- Input `.ped`, `.map`, `.freq`, `.dat` files created in [`Original_Input_Files/`](94_SNP_Simulation/Original_Input_Files) or [`10,000_SNPs_Input_Files/`](10,000_SNP_Simulation/10,000_SNPs_Input_Files/) 
 - Marker linkage models: both linked and unlinked versions prepared
 
 ### 2. Simulation
@@ -98,18 +98,18 @@ You’ll find the following in `Outputs/` folders throughout the repo:
 
 ## Blind Case Testing
 
-The `Cases/` folder contains a real-world proof-of-concept analysis.
+The [`Cases/`](Cases) folder contains a real-world proof-of-concept analysis.
 
 ### Data:
-- Genotype data from White British individuals (`White British Case Genotypes.xlsx`)
-- PEDs generated for each possible relationship class
+- Genotype data from White British individuals ([`White British Case Genotypes.xlsx`](Cases/White%20British%20Case%20Genotypes.xlsx))
+- PEDs generated for each possible relationship class ([`ped_files_template.xlsx`](Cases/ped_files_template.xlsx))
 
 ### Script:
 - `Case.Rmd`: Processes MERLIN logs, calculates LRs, and classifies most likely relationship
 
 ### Outputs:
 - `.merlin.log` and `.likelihood.txt` files for each test
-- `Case_LR_summary.csv` and `Case_LR_summary_classified.csv`: Final results
+-  [`Case_LR_summary.csv`](Cases/Outputs/Case_LR_summary.csv) and [`Case_LR_summary_classified.csv`](Cases/Outputs/Case_LR_summary_classified.csv): Final results
 
 ---
 
