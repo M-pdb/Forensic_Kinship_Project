@@ -52,19 +52,26 @@ It was developed in R and Bash and validated across three phases:
 
 ---
 
-## Libraries/Packages 
+## Libraries/Packages
 
-- Unix/Linux terminal or HPC
-- [`MERLIN`](http://csg.sph.umich.edu/abecasis/Merlin/) (v1.1.2)
-- `R` (≥ 4.4.1) with:
-  - ‘dplyr’
-  - ‘tidyr’
-  - ‘readr’
-  - ‘readxl’
-  - ‘ggplot2’
-  - ‘writexl’
-  - ‘scales’
-  - etc...
+- **Execution Environment:**
+  - Unix/Linux terminal or HPC
+  - [`MERLIN`](http://csg.sph.umich.edu/abecasis/Merlin/) (v1.1.2)
+  - Conda environment file: [`merlin_env.yml`](envs/merlin_env.yml) (used on HPC)
+
+- **R Requirements:**
+  - R (≥ 4.4.1) for local development  
+  - R (4.3.0) used on the HPC
+
+- **R Packages:**
+  - `dplyr`
+  - `tidyr`
+  - `readr`
+  - `readxl`
+  - `ggplot2`
+  - `writexl`
+  - `scales`
+  - *(see script headers for full list)*
 
 ---
 
