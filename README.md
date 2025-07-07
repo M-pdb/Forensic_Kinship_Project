@@ -58,7 +58,7 @@ It was developed in R and Bash and validated across three phases:
 - **Execution Environment:**
   - Unix/Linux terminal or HPC
   - [`MERLIN`](http://csg.sph.umich.edu/abecasis/Merlin/) (v1.1.2)
-  - Conda environment file: [`merlin_env.yml`](10,000SNP_Comparison/merlin_env.yml) (used on HPC)
+  - Conda environment file: [`merlin_env.yml`](10,000_SNP_Simulation/merlin_env.yml) (used on HPC)
 
 - **R Requirements:**
   - R (≥ 4.4.1) for local development  
