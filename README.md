@@ -19,6 +19,7 @@ Forensic_Kinship_Project/
 │   ├── Outputs/                           # All LR outputs, summary stats, plots
 │   └── Scripts/                           # Simulations, manipulations, LR and stat calculations, plots
 ├── 10,000_SNP_Simulation/                 # Phase 2: Genome-wide simulation
+│   ├── merlin_env.yml                     # Conda Environment to use MERLIN on the HPC 
 │   ├── FS_Simulation/                     # FS scenarios (linked/unlinked) - some MERLIN logs, LRs
 │   ├── HS_Simulation/                     # HS scenarios (linked/unlinked) - some MERLIN logs, LRs
 │   ├── FC_Simulation/                     # FC scenarios (linked/unlinked) - some MERLIN logs, LRs
@@ -57,7 +58,7 @@ It was developed in R and Bash and validated across three phases:
 - **Execution Environment:**
   - Unix/Linux terminal or HPC
   - [`MERLIN`](http://csg.sph.umich.edu/abecasis/Merlin/) (v1.1.2)
-  - Conda environment file: [`merlin_env.yml`](envs/merlin_env.yml) (used on HPC)
+  - Conda environment file: [`merlin_env.yml`](10,000SNP_Comparison/merlin_env.yml) (used on HPC)
 
 - **R Requirements:**
   - R (≥ 4.4.1) for local development  
