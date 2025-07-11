@@ -74,7 +74,7 @@ p <- ggplot(plot_data, aes(x = LR, colour = Group, fill = Group)) +
   ) +
   geom_vline(xintercept = 1e0, linetype = "dashed", colour = "black") +
   labs(
-    title = "Distribution of LRs for First Cousins vs Unrelated with 94 SNPs",
+    title = "Distribution of LRs for Half Siblings vs Unrelated with 94 SNPs",
     x     = "LRs (log scale)",
     y     = "Density"
   ) +
