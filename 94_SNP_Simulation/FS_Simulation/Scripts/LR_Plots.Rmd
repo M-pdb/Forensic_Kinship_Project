@@ -40,8 +40,8 @@ FS_tidy <- FS %>%
     LR    = 10^log10LR,
     Group = recode(
       Scenario,
-      log10LR_linked   = "Linked",
-      log10LR_unlinked = "Unlinked"
+      log10LR_linked   = "TrueFS_Linked",
+      log10LR_unlinked = "TrueFS_Unlinked"
     )
   )
 
