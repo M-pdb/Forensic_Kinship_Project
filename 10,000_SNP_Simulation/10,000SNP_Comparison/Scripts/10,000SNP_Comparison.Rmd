@@ -121,7 +121,7 @@ p_full <- ggplot(plot_data_fc, aes(x = log10LR, fill = Group, colour = Group)) +
   geom_density(alpha = 0.5, size = 0.8) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   labs(
-    title = "Supervisor FC vs UN – Full log10LR Distribution (9991 SNPs)",
+    title = "Independent Replication: FC vs UN – Full log10LR Distribution (9991 SNPs)",
     x = "log10LR", y = "Density"
   ) +
   theme_minimal() +
@@ -140,7 +140,7 @@ ggsave(
 # Capped plot
 p_capped <- p_full +
   coord_cartesian(ylim = c(0, 0.05)) +
-  labs(title = "Supervisor FC vs UN – Capped log10LR Distribution (9991 SNPs)")
+  labs(title = "Independent Replication: FC vs UN – Capped log10LR Distribution (9991 SNPs)")
 
 print(p_capped)
 
@@ -256,7 +256,7 @@ p_full <- ggplot(plot_data_hs, aes(x = log10LR, fill = Group, colour = Group)) +
   geom_density(alpha = 0.5, size = 0.8) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   labs(
-    title = "Supervisor HS vs UN – Full log10LR Distribution (9991 SNPs)",
+    title = "Independent Replication: HS vs UN – Full log10LR Distribution (9991 SNPs)",
     x = "log10LR", y = "Density"
   ) +
   theme_minimal() +
@@ -275,7 +275,7 @@ ggsave(
 # Capped plot
 p_capped <- p_full +
   coord_cartesian(ylim = c(0, 0.06)) +
-  labs(title = "Supervisor HS vs UN – Capped log10LR Distribution (9991 SNPs)")
+  labs(title = "Independent Replication: HS vs UN – Capped log10LR Distribution (9991 SNPs)")
 
 print(p_capped)
 
