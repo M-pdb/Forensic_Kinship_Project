@@ -40,8 +40,8 @@ HS_tidy <- HS %>%
     LR    = 10^log10LR,
     Group = recode(
       Scenario,
-      log10LR_linked   = "Linked",
-      log10LR_unlinked = "Unlinked"
+      log10LR_linked   = "TrueHS_Linked",
+      log10LR_unlinked = "TrueHS_Unlinked"
     )
   )
 
