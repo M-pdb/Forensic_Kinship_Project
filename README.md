@@ -10,7 +10,7 @@ The pipeline implements simulations for full siblings (FS), half siblings (HS), 
 
 ```
 Forensic_Kinship_Project/
-├── 94_SNP_Simulation/                     # Phase 1: Benchmarking (94 SNPs)
+├── 94_SNP_Simulation/                     # Stage 1: Benchmarking (94 SNPs)
 │   ├── FS_Simulation/                     # FS scenarios (linked/unlinked) - MERLIN logs, LRs
 │   ├── HS_Simulation/                     # HS scenarios (linked/unlinked) - MERLIN logs, LRs
 │   ├── FC_Simulation/                     # FC scenarios (linked/unlinked) - MERLIN logs, LRs
@@ -18,7 +18,7 @@ Forensic_Kinship_Project/
 │   ├── 94_SNP_Comparison/                 # Comparison of MERLIN and FamLink
 │   ├── Outputs/                           # All LR outputs, summary stats, plots
 │   └── Scripts/                           # Simulations, manipulations, LR and stat calculations, plots
-├── 10,000_SNP_Simulation/                 # Phase 2: Genome-wide simulation
+├── 10,000_SNP_Simulation/                 # Stage 2: Genome-wide simulation
 │   ├── merlin_env.yml                     # Conda Environment to use MERLIN on the HPC 
 │   ├── FS_Simulation/                     # FS scenarios (linked/unlinked) - some MERLIN logs, LRs
 │   ├── HS_Simulation/                     # HS scenarios (linked/unlinked) - some MERLIN logs, LRs
@@ -29,7 +29,7 @@ Forensic_Kinship_Project/
 │   └── 10,000_SNPs_Input_Files/
 │       ├── .ped/.map/.freq/.dat           # Input files
 │       └── Scripts/                       # Input file generation
-├── Cases/                                 # Phase 3: Blind testing on real genotype data
+├── Cases/                                 # Stage 3: Blind testing on real genotype data
 │   ├── Input_Files/                       # PEDs for hypotheses per case
 │   ├── Outputs/                           # MERLIN logs, LRs, final predictions
 │   ├── Scripts/                           # Case.Rmd for summary/reporting
